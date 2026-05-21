@@ -4,6 +4,14 @@ A modern enterprise dashboard UI for Redmine, inspired by ServiceNow-style opera
 
 This repository contains the **base UI** with mock data and API placeholder functions. The application is ready to be wired up to a real Redmine REST API later.
 
+**Live demo:** https://nbraithwaite26.github.io/redmine-ops-dashboard/
+
+**More docs:**
+- [CHANGELOG.md](./CHANGELOG.md) — every change in this and future releases
+- [docs/FEATURES.md](./docs/FEATURES.md) — feature checklist for every page and component
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — code layout, data flow, integration plan
+- [docs/API.md](./docs/API.md) — mock API reference + suggested Redmine REST mapping
+
 ## Features
 
 - App shell with yellow `#FEDF00` top bar and slim left sidebar
