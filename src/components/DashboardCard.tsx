@@ -1,8 +1,8 @@
 import { MoreHorizontal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DonutChart from './DonutChart';
 import type { DashboardMetric } from '../types/redmine';
+import { donutGradient } from '../lib/visual';
 
 type StatusColor = 'green' | 'orange' | 'red' | 'blue' | 'gray' | 'yellow';
 
@@ -16,7 +16,8 @@ const STATUS_CLASS: Record<StatusColor, string> = {
 };
 
 interface MetricProps {
-  /** Render directly from a typed DashboardMetric. The card builds its own donut + footer. */
+  /** Render directly from a typed DashboardMetric. The card builds its own
+   *  conic-gradient donut + footer. */
   metric: DashboardMetric;
   onClick?: () => void;
 }
@@ -47,14 +48,11 @@ export default function DashboardCard(props: Props) {
       metric.total !== undefined ? `${metric.value}/${metric.total}` : `${metric.value}`;
     return (
       <CardShell title={metric.title} onClick={handle}>
-        <div className="flex-1 flex items-center justify-center py-3">
-          <DonutChart
-            value={metric.progress}
-            total={100}
-            color={metric.color}
-            label={valueLabel}
-            caption={metric.caption}
-          />
+        <div className="flex-1 flex flex-col items-center justify-center py-3 gap-1">
+          <ConicRing progress={metric.progress} color={metric.color} label={valueLabel} />
+          {metric.caption && (
+            <div className="text-xs text-ink-muted">{metric.caption}</div>
+          )}
         </div>
         <div className="flex items-center justify-center gap-2 text-xs text-ink-muted">
           {metric.statusLabel && (
@@ -92,6 +90,7 @@ function CardShell({
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? title : undefined}
     >
       <div className="flex items-start justify-between">
         <div className="text-sm font-medium text-ink-soft">{title}</div>
@@ -104,6 +103,54 @@ function CardShell({
         </button>
       </div>
       {children}
+    </div>
+  );
+}
+
+/** CSS conic-gradient ring with a white inner cutout and a centered label. */
+function ConicRing({
+  progress,
+  color,
+  label,
+  size = 96,
+  thickness = 10,
+}: {
+  progress: number;
+  color: string;
+  label: string;
+  size?: number;
+  thickness?: number;
+}) {
+  const inner = size - thickness * 2;
+  return (
+    <div
+      role="img"
+      aria-label={`${label} (${Math.round(progress)}%)`}
+      data-testid="conic-ring"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: donutGradient(progress, color),
+        display: 'grid',
+        placeItems: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: inner,
+          height: inner,
+          borderRadius: '50%',
+          background: 'white',
+          display: 'grid',
+          placeItems: 'center',
+          fontWeight: 600,
+          fontSize: size * 0.22,
+          color: '#111827',
+        }}
+      >
+        {label}
+      </div>
     </div>
   );
 }

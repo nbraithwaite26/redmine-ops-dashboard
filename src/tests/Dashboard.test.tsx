@@ -81,6 +81,20 @@ describe('<Dashboard /> (functional + integration)', () => {
     );
   });
 
+  // Integration: every metric card on the dashboard uses the conic-gradient
+  // ring visual (and there are 8 of them).
+  it('renders a conic-gradient ring per metric card', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId('conic-ring').length).toBeGreaterThan(0),
+    );
+    expect(screen.getAllByTestId('conic-ring')).toHaveLength(8);
+  });
+
   // Integration: My Tasks table renders below the cards and includes a row
   // for one of the seeded issues.
   it('renders the My Tasks table with at least one seeded issue', async () => {

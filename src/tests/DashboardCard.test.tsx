@@ -77,6 +77,19 @@ describe('<DashboardCard /> (metric prop variant)', () => {
     expect(card).not.toHaveAttribute('role', 'button');
   });
 
+  it('renders a conic-gradient ring sized and colored from the metric', () => {
+    render(
+      <MemoryRouter>
+        <DashboardCard metric={sampleMetric} />
+      </MemoryRouter>,
+    );
+    const ring = screen.getByTestId('conic-ring');
+    // Ring uses the metric color in its conic-gradient inline style.
+    expect(ring.getAttribute('style')).toContain('#8B5CF6');
+    // aria-label includes the rounded percentage for screen readers.
+    expect(ring).toHaveAttribute('aria-label', '12/20 (60%)');
+  });
+
   it('three-dot menu click does not trigger card navigation', () => {
     const onClick = vi.fn();
     render(
