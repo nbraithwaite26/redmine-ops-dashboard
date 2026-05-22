@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
-import { daysOverdue, formatDate, formatHours, isOverdue, priorityPill, statusPill } from '../lib/format';
+import { MOCK_TODAY, daysOverdue, formatDate, formatHours, isOverdue, priorityPill, statusPill } from '../lib/format';
 
 interface Props {
   title: string;
@@ -178,8 +178,8 @@ export default function IssueTable({
           </thead>
           <tbody>
             {filtered.map((i) => {
-              const overdue = isOverdue(i.dueDate);
-              const overdueDays = daysOverdue(i.dueDate);
+              const overdue = isOverdue(i.dueDate, MOCK_TODAY);
+              const overdueDays = daysOverdue(i.dueDate, MOCK_TODAY);
               const highPriority = i.priority === 'Urgent' || i.priority === 'Immediate';
               return (
                 <tr
@@ -299,7 +299,7 @@ function sortValue(i: Issue, key: SortKey): string | number {
     case 'spentHours': return i.spentHours;
     case 'estimatedHours': return i.estimatedHours ?? 0;
     case 'doneRatio': return i.doneRatio;
-    case 'daysOverdue': return daysOverdue(i.dueDate);
+    case 'daysOverdue': return daysOverdue(i.dueDate, MOCK_TODAY);
     default: return 0;
   }
 }

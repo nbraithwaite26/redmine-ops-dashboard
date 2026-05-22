@@ -1,13 +1,17 @@
 import type { IssuePriority, IssueStatus } from '../types/redmine';
 
-export const TODAY = new Date('2026-05-21'); // pinned for mock-mode reproducibility
+/**
+ * Mock-mode "today" used by demo pages so the data appears stable. Real
+ * call sites should pass `new Date()` explicitly via the `today` parameter.
+ */
+export const MOCK_TODAY = new Date('2026-05-21');
 
-export function isOverdue(dueDate: string | null, today: Date = TODAY): boolean {
+export function isOverdue(dueDate: string | null, today: Date = new Date()): boolean {
   if (!dueDate) return false;
   return dueDate < today.toISOString().slice(0, 10);
 }
 
-export function daysOverdue(dueDate: string | null, today: Date = TODAY): number {
+export function daysOverdue(dueDate: string | null, today: Date = new Date()): number {
   if (!dueDate) return 0;
   const due = new Date(dueDate);
   const diff = today.getTime() - due.getTime();
