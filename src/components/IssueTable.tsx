@@ -13,6 +13,7 @@ import {
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
 import { MOCK_TODAY, daysOverdue, formatDate, formatHours, isOverdue, priorityPill, statusPill } from '../lib/format';
+import ProgressBar from './ProgressBar';
 
 interface Props {
   title: string;
@@ -232,7 +233,9 @@ export default function IssueTable({
                   )}
                   <td className="px-2 py-2 text-ink-soft">{formatHours(i.spentHours)}</td>
                   <td className="px-2 py-2 text-ink-soft">{formatHours(i.estimatedHours)}</td>
-                  <td className="px-2 py-2 text-ink-soft">{i.doneRatio}%</td>
+                  <td className="px-2 py-2 text-ink-soft">
+                    <ProgressBar value={i.doneRatio} ariaLabel={`${i.doneRatio}% done`} />
+                  </td>
                   <td className="px-2 py-2 text-ink-soft truncate max-w-[240px]">
                     {i.nextAction ?? '—'}
                   </td>
