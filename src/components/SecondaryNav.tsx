@@ -1,42 +1,49 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Filter, Search } from 'lucide-react';
+import {
+  AlarmClock,
+  BarChart3,
+  ChevronDown,
+  ClipboardList,
+  FileBarChart,
+  Filter,
+  FolderKanban,
+  Hammer,
+  Library,
+  Search,
+  Settings as SettingsIcon,
+  Timer,
+  User,
+  Users,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 
 interface SecondaryItem {
   label: string;
   to: string;
+  icon: LucideIcon;
   hint?: string;
 }
 
 const items: SecondaryItem[] = [
-  { label: 'My Assigned Work', to: '/my-tasks', hint: 'Issues assigned to you' },
-  { label: 'Past Due Tasks', to: '/past-due', hint: 'Overdue across the team' },
-  { label: 'Project Portfolio', to: '/projects', hint: 'All active projects' },
-  { label: 'Resource Planning', to: '/resources/personal', hint: 'Your allocations and load' },
-  { label: 'Team Workload', to: '/resources/team', hint: 'Team-wide allocation view' },
-  { label: 'Time Entries', to: '/time', hint: 'Weekly time entries' },
-  { label: 'Project Builder', to: '/project-builder' },
-  { label: 'KPI Tracker', to: '/reports?tab=kpi', hint: 'Quarterly KPI status' },
-  { label: 'Issue Reports', to: '/reports?tab=issues', hint: 'Throughput and lead time' },
-  { label: 'Redmine Directory', to: '/directory' },
-  { label: 'API Settings', to: '/settings' },
+  { label: 'My Assigned Work', to: '/my-tasks', icon: User, hint: 'Issues assigned to you' },
+  { label: 'Past Due Tasks', to: '/past-due', icon: AlarmClock, hint: 'Overdue across the team' },
+  { label: 'Project Portfolio', to: '/projects', icon: FolderKanban, hint: 'All active projects' },
+  { label: 'Resource Planning', to: '/resources/personal', icon: ClipboardList, hint: 'Your allocations and load' },
+  { label: 'Team Workload', to: '/resources/team', icon: Users, hint: 'Team-wide allocation view' },
+  { label: 'Time Entries', to: '/time', icon: Timer, hint: 'Weekly time entries' },
+  { label: 'Project Builder', to: '/project-builder', icon: Hammer },
+  { label: 'KPI Tracker', to: '/reports?tab=kpi', icon: BarChart3, hint: 'Quarterly KPI status' },
+  { label: 'Issue Reports', to: '/reports?tab=issues', icon: FileBarChart, hint: 'Throughput and lead time' },
+  { label: 'Redmine Directory', to: '/directory', icon: Library },
+  { label: 'API Settings', to: '/settings', icon: SettingsIcon },
 ];
 
-/**
- * Returns whether the workspace item should render as active for the
- * current URL. We use pathname **and** the `tab` query parameter so that
- * KPI Tracker and Issue Reports (both pointing to /reports) can be
- * disambiguated. NavLink's built-in `isActive` ignores the query string,
- * which is why we replace it.
- */
 function isItemActive(item: SecondaryItem, pathname: string, search: string): boolean {
   const [itemPath, itemQuery = ''] = item.to.split('?');
   if (itemPath !== pathname) return false;
   if (!itemQuery) {
-    // For tab-bearing pages, the unparameterised item should only match
-    // when no tab query is present (so we never highlight a "bare" entry
-    // alongside a tabbed one for the same path).
     return new URLSearchParams(search).get('tab') === null;
   }
   const itemTab = new URLSearchParams(itemQuery).get('tab');
@@ -44,7 +51,11 @@ function isItemActive(item: SecondaryItem, pathname: string, search: string): bo
   return itemTab === currentTab;
 }
 
-export default function SecondaryNav() {
+interface Props {
+  collapsed?: boolean;
+}
+
+export default function SecondaryNav({ collapsed = false }: Props) {
   const [query, setQuery] = useState('');
   const location = useLocation();
 
@@ -56,8 +67,44 @@ export default function SecondaryNav() {
     );
   }, [query]);
 
+  if (collapsed) {
+    return (
+      <aside
+        data-testid="secondary-nav"
+        data-collapsed="true"
+        className="w-14 shrink-0 bg-white border-r border-gray-200 flex flex-col py-2 gap-1 items-center"
+        aria-label="Workspace navigation"
+      >
+        {items.map((item) => {
+          const active = isItemActive(item, location.pathname, location.search);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={`${item.label}-${item.to}`}
+              to={item.to}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={active ? 'page' : undefined}
+              className={clsx(
+                'h-9 w-9 flex items-center justify-center rounded-md transition',
+                active ? 'bg-brand-100 text-ink' : 'text-ink-muted hover:bg-gray-100',
+              )}
+            >
+              <Icon size={16} />
+            </Link>
+          );
+        })}
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col" aria-label="Workspace navigation">
+    <aside
+      data-testid="secondary-nav"
+      data-collapsed="false"
+      className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col"
+      aria-label="Workspace navigation"
+    >
       <div className="px-3 pt-3 pb-2 border-b border-gray-100">
         <div className="flex items-center justify-between text-xs font-semibold text-ink-muted uppercase tracking-wide">
           <span>Workspaces</span>

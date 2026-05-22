@@ -59,4 +59,30 @@ describe('<SecondaryNav />', () => {
     expect(screen.getByRole('link', { name: 'Issue Reports' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'KPI Tracker' })).not.toHaveAttribute('aria-current', 'page');
   });
+
+  it('renders the icon-only thin strip when collapsed', () => {
+    render(
+      <MemoryRouter>
+        <SecondaryNav collapsed={true} />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByTestId('secondary-nav');
+    expect(nav).toHaveAttribute('data-collapsed', 'true');
+    // Labels are not rendered as text content in collapsed mode.
+    expect(screen.queryByText('My Assigned Work')).not.toBeInTheDocument();
+    // ...but aria-labels expose the names to assistive tech.
+    expect(screen.getByRole('link', { name: 'My Assigned Work' })).toBeInTheDocument();
+  });
+
+  it('renders the full panel when not collapsed', () => {
+    render(
+      <MemoryRouter>
+        <SecondaryNav collapsed={false} />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByTestId('secondary-nav');
+    expect(nav).toHaveAttribute('data-collapsed', 'false');
+    expect(screen.getByText('My Assigned Work')).toBeInTheDocument();
+    expect(screen.getByLabelText(/filter workspace list/i)).toBeInTheDocument();
+  });
 });

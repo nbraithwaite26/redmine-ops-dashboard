@@ -5,6 +5,7 @@ import SecondaryNav from './SecondaryNav';
 import Sidebar from './Sidebar';
 import StatusBanner from './StatusBanner';
 import TopBar from './TopBar';
+import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import { useSyncBanner } from '../hooks/useSyncBanner';
 import { getConnectionSettings, getCurrentUser, syncWithRedmine } from '../services/redmineApi';
 
@@ -18,6 +19,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     mockMode,
   });
   const isSyncing = status.kind === 'syncing';
+  const { collapsed, toggle } = useSidebarCollapse();
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +56,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         mockMode={mockMode}
         isSyncing={isSyncing}
         onClickSync={handleSync}
+        sidebarCollapsed={collapsed}
+        onToggleSidebar={toggle}
       />
       {banner && (
         <StatusBanner
@@ -63,8 +67,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
-        <SecondaryNav />
+        <Sidebar collapsed={collapsed} onToggle={toggle} />
+        <SecondaryNav collapsed={collapsed} />
         <main className="flex-1 min-w-0 overflow-y-auto">
           <div className="max-w-[1400px] mx-auto p-6">{children}</div>
         </main>

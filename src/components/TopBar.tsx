@@ -1,19 +1,47 @@
-import { Bell, ChevronDown, HelpCircle, RefreshCw, Search, Settings as SettingsIcon, User } from 'lucide-react';
+import {
+  Bell,
+  ChevronDown,
+  HelpCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  Search,
+  Settings as SettingsIcon,
+  User,
+} from 'lucide-react';
 
 interface Props {
   apiConnected: boolean;
   mockMode: boolean;
   isSyncing: boolean;
   onClickSync: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
-export default function TopBar({ apiConnected, mockMode, isSyncing, onClickSync }: Props) {
+export default function TopBar({
+  apiConnected,
+  mockMode,
+  isSyncing,
+  onClickSync,
+  sidebarCollapsed,
+  onToggleSidebar,
+}: Props) {
   return (
     <header
       className="bg-brand text-ink h-14 flex items-center px-4 gap-4 border-b border-brand-500/40"
       role="banner"
     >
       <div className="flex items-center gap-2 min-w-[260px]">
+        <button
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+          aria-pressed={sidebarCollapsed}
+          title="Toggle sidebar ([)"
+          className="p-1.5 rounded hover:bg-brand-500/30"
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
         <div className="h-8 w-8 rounded bg-ink text-brand flex items-center justify-center font-bold">
           R
         </div>

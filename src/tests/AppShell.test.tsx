@@ -6,6 +6,7 @@ import AppShell from '../components/AppShell';
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -61,6 +62,68 @@ describe('<AppShell /> banner integration', () => {
     vi.advanceTimersByTime(5100);
     await waitFor(() =>
       expect(screen.getByTestId('status-banner')).toHaveAttribute('data-severity', 'warning'),
+    );
+  });
+
+  it('clicking the TopBar toggle collapses the sidebar', async () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('primary-sidebar'));
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+      'data-collapsed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /toggle sidebar/i }));
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+      'data-collapsed',
+      'true',
+    );
+    expect(screen.getByTestId('secondary-nav')).toHaveAttribute(
+      'data-collapsed',
+      'true',
+    );
+    expect(window.localStorage.getItem('rod.sidebar.collapsed')).toBe('1');
+  });
+
+  it('pressing "[" toggles the sidebar via the keyboard shortcut', async () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('primary-sidebar'));
+    fireEvent.keyDown(window, { key: '[' });
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+      'data-collapsed',
+      'true',
+    );
+    fireEvent.keyDown(window, { key: '[' });
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+      'data-collapsed',
+      'false',
+    );
+  });
+
+  it('restores the collapsed state from localStorage on mount', async () => {
+    window.localStorage.setItem('rod.sidebar.collapsed', '1');
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('primary-sidebar'));
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+      'data-collapsed',
+      'true',
     );
   });
 
