@@ -9,6 +9,8 @@ import {
   Settings as SettingsIcon,
   User,
 } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
+import type { EffectiveTheme } from '../hooks/useTheme';
 
 interface Props {
   apiConnected: boolean;
@@ -17,6 +19,8 @@ interface Props {
   onClickSync: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  effectiveTheme: EffectiveTheme;
+  onToggleTheme: () => void;
 }
 
 export default function TopBar({
@@ -26,6 +30,8 @@ export default function TopBar({
   onClickSync,
   sidebarCollapsed,
   onToggleSidebar,
+  effectiveTheme,
+  onToggleTheme,
 }: Props) {
   return (
     <header
@@ -92,6 +98,11 @@ export default function TopBar({
         >
           {apiConnected ? 'Connected' : mockMode ? 'Mock mode' : 'Not connected'}
         </span>
+        <ThemeToggle
+          effectiveTheme={effectiveTheme}
+          onToggle={onToggleTheme}
+          className="p-1.5 rounded hover:bg-brand-500/30"
+        />
         <button className="p-1.5 rounded hover:bg-brand-500/30" aria-label="Help">
           <HelpCircle size={18} />
         </button>

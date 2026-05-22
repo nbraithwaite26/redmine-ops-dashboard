@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — CR #12: Dark mode
+- New `useTheme` hook + `ThemeToggle` component. Three states: `light`,
+  `dark`, `system`; first visit follows `prefers-color-scheme`; manual
+  choice persists in localStorage (`rod.theme`).
+- Toggle lives in the TopBar (Sun/Moon icon next to the help button) and on
+  the Settings page (light/dark/system pills + "currently displaying"
+  indicator). Keyboard shortcut `]` flips theme app-wide (mirrors `[` for
+  sidebar collapse).
+- Theming driven by CSS variables in `:root` / `:root.dark` (not Tailwind
+  per-class `dark:` variants). Tailwind tokens (`ink`, `ink-soft`, `canvas`,
+  `surface`, `subtle`, `border-default`, `border-muted`, etc.) point at the
+  variables. Pill colors shift to muted dark variants.
+- Brand `#FEDF00` yellow remains constant in both modes.
+- Conic donut track auto-follows theme via `--donut-track`. Home hero
+  gradient transitions from slate-900/slate-700 (light) to pure black on
+  dark.
+- 18 new tests across `useTheme.test.ts`, `ThemeToggle.test.tsx`, and
+  `theme.integration.test.tsx`. Suite at 217 passing.
+
 ### Added — Phase 1: foundations
 - **CR #11** — `lib/format.ts` is now pure. `isOverdue`/`daysOverdue` take an
   optional `today` parameter (defaults to `new Date()`); the pinned

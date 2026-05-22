@@ -291,6 +291,34 @@ removes a hidden dependency.
 
 ---
 
+## #12 — Dark mode / light mode toggle
+
+**Status:** ✅ Shipped
+
+**Request:** App-wide theme switch between dark and light. Dark mode uses
+near-black canvas with grey contrasts; brand yellow stays bright in both.
+
+**Decisions confirmed:**
+- Toggle in both TopBar and Settings, plus `]` keyboard shortcut.
+- First visit follows OS `prefers-color-scheme`; manual choice overrides.
+- localStorage key `rod.theme` (`light` | `dark` | `system`).
+- Status pills shift to muted variants in dark.
+- Yellow `#FEDF00` brand stays bright in both modes.
+- Conic donut track auto-swaps via `--donut-track`.
+- Home hero transitions to pure black on dark via `--hero-from/--hero-to`.
+- CSS variables in `:root` / `:root.dark` (not Tailwind `dark:` per-class).
+- Toggle UX: single button cycling light ↔ dark (Q12i option B); system is
+  configurable via Settings.
+
+**Result:**
+- New: `useTheme` hook, `ThemeToggle` component, theme variable scope in
+  `index.css`, three new test files.
+- Edited: `tailwind.config.js`, `AppShell`, `TopBar`, `Settings`,
+  `DonutChart`, `DashboardCard`, `Home`.
+- 217 tests passing (+18 from before this CR).
+
+---
+
 # Codex-comparison explicit skips
 
 The following Codex patterns were considered and **rejected** because

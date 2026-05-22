@@ -19,10 +19,13 @@ export default function DonutChart({
   size = 96,
   thickness = 10,
   color = '#7C3AED',
-  trackColor = '#E5E7EB',
+  // Falls back to the theme-aware CSS variable. Passing an explicit hex
+  // overrides; otherwise the SVG track follows light/dark.
+  trackColor,
   label,
   caption,
 }: Props) {
+  const resolvedTrackColor = trackColor ?? 'var(--donut-track)';
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
   const safeTotal = total <= 0 ? 1 : total;
@@ -37,7 +40,7 @@ export default function DonutChart({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={trackColor}
+          stroke={resolvedTrackColor}
           strokeWidth={thickness}
         />
         <circle

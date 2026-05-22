@@ -101,7 +101,11 @@ export default function Home() {
     <div className="space-y-6">
       <section
         data-testid="home-hero"
-        className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-6 text-white shadow-card"
+        className="rounded-2xl p-6 text-white shadow-card"
+        style={{
+          background:
+            'linear-gradient(to right, var(--hero-from), var(--hero-to))',
+        }}
       >
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>

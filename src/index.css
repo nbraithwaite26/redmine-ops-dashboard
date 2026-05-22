@@ -2,6 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Theme tokens ────────────────────────────────────────────────────────
+   Components reference these via `bg-canvas`, `text-ink`, etc. (mapped in
+   tailwind.config.js to var(--token)) so a single class can change with
+   the theme without per-class `dark:` rewrites. The yellow brand color
+   stays the same in both modes — confirmed in CR #12 Q12e. */
+:root {
+  --bg-canvas: #F5F7FA;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #F9FAFB;
+  --bg-overlay: rgba(0, 0, 0, 0.30);
+
+  --border-default: #E5E7EB;
+  --border-muted: #F3F4F6;
+
+  --text-ink: #111827;
+  --text-ink-soft: #1F2937;
+  --text-ink-muted: #4B5563;
+
+  --link: #2563EB;          /* blue-600 */
+  --link-hover: #1D4ED8;
+
+  --donut-track: #E5E7EB;
+  --hero-from: #0F172A;     /* slate-900 */
+  --hero-to: #334155;       /* slate-700 */
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.10);
+
+  /* Status pill backgrounds + foregrounds. Keep these colorful in light mode
+     and shift to muted variants in dark mode (CR #12 Q12d). */
+  --pill-green-bg: #D1FAE5;   --pill-green-fg: #065F46;
+  --pill-orange-bg: #FFEDD5;  --pill-orange-fg: #9A3412;
+  --pill-red-bg: #FEE2E2;     --pill-red-fg: #991B1B;
+  --pill-blue-bg: #DBEAFE;    --pill-blue-fg: #1E40AF;
+  --pill-yellow-bg: #FEF3C7;  --pill-yellow-fg: #92400E;
+  --pill-gray-bg: #F3F4F6;    --pill-gray-fg: #1F2937;
+}
+
+:root.dark {
+  --bg-canvas: #0A0A0A;
+  --bg-card: #161616;
+  --bg-elevated: #1F1F1F;
+  --bg-subtle: #1B1B1B;
+  --bg-overlay: rgba(0, 0, 0, 0.55);
+
+  --border-default: #2A2A2A;
+  --border-muted: #1F1F1F;
+
+  --text-ink: #F3F4F6;
+  --text-ink-soft: #E5E7EB;
+  --text-ink-muted: #9CA3AF;
+
+  --link: #60A5FA;          /* blue-400 */
+  --link-hover: #93C5FD;
+
+  --donut-track: #2A2A2A;
+  --hero-from: #000000;
+  --hero-to: #0A0A0A;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.55);
+
+  /* Muted pill variants — darker tinted backgrounds with brighter fg text. */
+  --pill-green-bg: #064E3B;   --pill-green-fg: #6EE7B7;
+  --pill-orange-bg: #6B2E0F;  --pill-orange-fg: #FDBA74;
+  --pill-red-bg: #5A1E1E;     --pill-red-fg: #FCA5A5;
+  --pill-blue-bg: #1E3A8A;    --pill-blue-fg: #93C5FD;
+  --pill-yellow-bg: #5C3A06;  --pill-yellow-fg: #FDE68A;
+  --pill-gray-bg: #2A2A2A;    --pill-gray-fg: #D1D5DB;
+}
+
 html,
 body,
 #root {
@@ -10,14 +80,18 @@ body,
 
 body {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  color: #111827;
-  background-color: #F5F7FA;
+  color: var(--text-ink);
+  background-color: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-xl shadow-card border border-gray-100;
+    @apply rounded-xl border;
+    background-color: var(--bg-card);
+    border-color: var(--border-muted);
+    box-shadow: var(--shadow-card);
   }
   .btn {
     @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition;
@@ -26,35 +100,153 @@ body {
     @apply btn bg-brand text-ink hover:bg-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500;
   }
   .btn-secondary {
-    @apply btn bg-white text-ink border border-gray-200 hover:bg-gray-50;
+    @apply btn;
+    background-color: var(--bg-card);
+    color: var(--text-ink);
+    border: 1px solid var(--border-default);
+  }
+  .btn-secondary:hover {
+    background-color: var(--bg-subtle);
   }
   .btn-ghost {
-    @apply btn text-ink-muted hover:bg-gray-100;
+    @apply btn;
+    color: var(--text-ink-muted);
+  }
+  .btn-ghost:hover {
+    background-color: var(--bg-subtle);
   }
   .link {
-    @apply text-blue-600 hover:text-blue-800 hover:underline;
+    color: var(--link);
+    transition: color 100ms ease;
+  }
+  .link:hover {
+    color: var(--link-hover);
+    text-decoration: underline;
   }
   .pill {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
   }
   .pill-green {
-    @apply pill bg-green-100 text-green-800;
+    @apply pill;
+    background-color: var(--pill-green-bg);
+    color: var(--pill-green-fg);
   }
   .pill-red {
-    @apply pill bg-red-100 text-red-800;
+    @apply pill;
+    background-color: var(--pill-red-bg);
+    color: var(--pill-red-fg);
   }
   .pill-orange {
-    @apply pill bg-orange-100 text-orange-800;
+    @apply pill;
+    background-color: var(--pill-orange-bg);
+    color: var(--pill-orange-fg);
   }
   .pill-blue {
-    @apply pill bg-blue-100 text-blue-800;
+    @apply pill;
+    background-color: var(--pill-blue-bg);
+    color: var(--pill-blue-fg);
   }
   .pill-gray {
-    @apply pill bg-gray-100 text-gray-700;
+    @apply pill;
+    background-color: var(--pill-gray-bg);
+    color: var(--pill-gray-fg);
   }
   .pill-yellow {
-    @apply pill bg-yellow-100 text-yellow-800;
+    @apply pill;
+    background-color: var(--pill-yellow-bg);
+    color: var(--pill-yellow-fg);
   }
+}
+
+/* Dark-mode overrides for legacy Tailwind color classes used throughout the
+   pages. Selector specificity (0,2,0) > the plain Tailwind class (0,1,0) so
+   no !important needed. New code should prefer semantic tokens (bg-surface,
+   bg-subtle, text-ink, etc.) but these rules let dark mode work today
+   without rewriting every component. */
+:root.dark .bg-white,
+:root.dark .bg-canvas\/50,
+:root.dark .bg-canvas\/60,
+:root.dark .bg-canvas\/70,
+:root.dark .hover\:bg-canvas\/60:hover,
+:root.dark .hover\:bg-canvas\/70:hover {
+  background-color: var(--bg-card);
+}
+:root.dark .bg-gray-50,
+:root.dark .bg-gray-100,
+:root.dark .hover\:bg-gray-50:hover,
+:root.dark .hover\:bg-gray-100:hover {
+  background-color: var(--bg-subtle);
+}
+:root.dark .bg-white\/60,
+:root.dark .bg-white\/70,
+:root.dark .bg-white\/95 {
+  background-color: var(--bg-elevated);
+}
+:root.dark .border-gray-50,
+:root.dark .border-gray-100 {
+  border-color: var(--border-muted);
+}
+:root.dark .border-gray-200,
+:root.dark .border-gray-300 {
+  border-color: var(--border-default);
+}
+:root.dark .text-gray-400,
+:root.dark .text-gray-500,
+:root.dark .text-gray-600 {
+  color: var(--text-ink-muted);
+}
+:root.dark .text-gray-700,
+:root.dark .text-gray-800,
+:root.dark .text-gray-900,
+:root.dark .text-slate-700,
+:root.dark .text-slate-900 {
+  color: var(--text-ink);
+}
+
+/* Modal/drawer scrim — darker on dark to feel correct against the canvas. */
+:root.dark .bg-black\/30 {
+  background-color: var(--bg-overlay);
+}
+
+/* Pill colors used directly via bg-{color}-100 / text-{color}-800 etc.
+   Shift to the muted tinted variants in dark mode. */
+:root.dark .bg-green-100,
+:root.dark .bg-green-50 { background-color: var(--pill-green-bg); }
+:root.dark .text-green-800,
+:root.dark .text-green-900,
+:root.dark .text-green-700 { color: var(--pill-green-fg); }
+
+:root.dark .bg-orange-100,
+:root.dark .bg-orange-50 { background-color: var(--pill-orange-bg); }
+:root.dark .text-orange-800,
+:root.dark .text-orange-900,
+:root.dark .text-orange-700 { color: var(--pill-orange-fg); }
+
+:root.dark .bg-red-100,
+:root.dark .bg-red-50,
+:root.dark .bg-red-50\/40 { background-color: var(--pill-red-bg); }
+:root.dark .text-red-600,
+:root.dark .text-red-800,
+:root.dark .text-red-900 { color: var(--pill-red-fg); }
+
+:root.dark .bg-blue-100,
+:root.dark .bg-blue-50 { background-color: var(--pill-blue-bg); }
+:root.dark .text-blue-800,
+:root.dark .text-blue-900,
+:root.dark .text-blue-700 { color: var(--pill-blue-fg); }
+
+:root.dark .bg-yellow-100,
+:root.dark .bg-yellow-50 { background-color: var(--pill-yellow-bg); }
+:root.dark .text-yellow-800,
+:root.dark .text-yellow-900 { color: var(--pill-yellow-fg); }
+
+/* Smooth color transition on key surfaces that swap heavily between modes. */
+.card,
+aside,
+header,
+table,
+section {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 /* Custom scrollbar so panels feel tight like an enterprise dashboard. */
@@ -63,11 +255,11 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--border-default);
   border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--text-ink-muted);
 }
 ::-webkit-scrollbar-track {
   background: transparent;

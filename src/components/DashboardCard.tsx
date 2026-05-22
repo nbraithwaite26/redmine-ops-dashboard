@@ -107,7 +107,7 @@ function CardShell({
   );
 }
 
-/** CSS conic-gradient ring with a white inner cutout and a centered label. */
+/** CSS conic-gradient ring with a theme-aware inner cutout and a centered label. */
 function ConicRing({
   progress,
   color,
@@ -131,7 +131,8 @@ function ConicRing({
         width: size,
         height: size,
         borderRadius: '50%',
-        background: donutGradient(progress, color),
+        // Track color follows the active theme via --donut-track.
+        background: donutGradient(progress, color, 'var(--donut-track)'),
         display: 'grid',
         placeItems: 'center',
       }}
@@ -141,12 +142,12 @@ function ConicRing({
           width: inner,
           height: inner,
           borderRadius: '50%',
-          background: 'white',
+          background: 'var(--bg-card)',
+          color: 'var(--text-ink)',
           display: 'grid',
           placeItems: 'center',
           fontWeight: 600,
           fontSize: size * 0.22,
-          color: '#111827',
         }}
       >
         {label}

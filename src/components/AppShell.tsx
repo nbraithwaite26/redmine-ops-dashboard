@@ -7,6 +7,7 @@ import StatusBanner from './StatusBanner';
 import TopBar from './TopBar';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import { useSyncBanner } from '../hooks/useSyncBanner';
+import { useTheme } from '../hooks/useTheme';
 import { getConnectionSettings, getCurrentUser, syncWithRedmine } from '../services/redmineApi';
 
 const ROUTES_WITHOUT_RIGHT_PANEL = new Set(['/resources', '/resources/personal', '/resources/team', '/project-builder', '/settings']);
@@ -20,6 +21,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   });
   const isSyncing = status.kind === 'syncing';
   const { collapsed, toggle } = useSidebarCollapse();
+  const { effectiveTheme, toggle: toggleTheme } = useTheme();
+
+  // Keyboard shortcut: `]` toggles theme (pairs with `[` for sidebar).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== ']') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+        return;
+      }
+      toggleTheme();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleTheme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +74,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onClickSync={handleSync}
         sidebarCollapsed={collapsed}
         onToggleSidebar={toggle}
+        effectiveTheme={effectiveTheme}
+        onToggleTheme={toggleTheme}
       />
       {banner && (
         <StatusBanner

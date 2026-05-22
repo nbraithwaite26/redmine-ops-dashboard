@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Save, Wifi } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Monitor, Moon, Save, Sun, Wifi } from 'lucide-react';
+import clsx from 'clsx';
 import {
   getConnectionSettings,
   saveConnectionSettings,
   testConnection,
 } from '../services/redmineApi';
 import type { ConnectionSettings, ConnectionStatus } from '../types/redmine';
+import { useTheme } from '../hooks/useTheme';
+import type { ThemeChoice } from '../hooks/useTheme';
+
+const THEME_OPTIONS: Array<{ id: ThemeChoice; label: string; Icon: typeof Sun }> = [
+  { id: 'light', label: 'Light', Icon: Sun },
+  { id: 'dark', label: 'Dark', Icon: Moon },
+  { id: 'system', label: 'System', Icon: Monitor },
+];
 
 export default function Settings() {
   const [settings, setSettings] = useState<ConnectionSettings>({
@@ -38,14 +47,51 @@ export default function Settings() {
     }
   };
 
+  const { theme, setTheme, effectiveTheme } = useTheme();
+
   return (
     <div className="space-y-4 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-semibold">API Settings</h1>
+        <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-sm text-ink-muted">
-          Connect this dashboard to your Redmine instance.
+          API connection and appearance preferences.
         </p>
       </div>
+
+      <section className="card p-5 space-y-3" data-testid="appearance-section">
+        <h2 className="font-semibold">Appearance</h2>
+        <p className="text-sm text-ink-muted">
+          Choose how the dashboard looks. <code>System</code> follows your OS
+          and updates live; <code>Light</code> and <code>Dark</code> override that.
+          You can also press <kbd className="px-1 py-0.5 text-xs border rounded">]</kbd>
+          {' '}to flip between light and dark from anywhere in the app.
+        </p>
+        <div className="flex items-center gap-2">
+          {THEME_OPTIONS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTheme(id)}
+              data-testid={`theme-option-${id}`}
+              aria-pressed={theme === id}
+              className={clsx(
+                'flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition',
+                theme === id
+                  ? 'bg-brand text-ink border-brand-500 font-medium'
+                  : 'border-[color:var(--border-default)] hover:bg-subtle',
+              )}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs text-ink-muted" data-testid="effective-theme">
+          Currently displaying: <span className="font-medium text-ink">{effectiveTheme}</span>
+          {theme === 'system' && (
+            <span className="ml-1">(from your OS)</span>
+          )}
+        </div>
+      </section>
 
       <section className="card p-5 space-y-4">
         <h2 className="font-semibold">Redmine connection</h2>
