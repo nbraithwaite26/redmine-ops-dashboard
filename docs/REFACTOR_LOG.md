@@ -121,7 +121,9 @@ Filename note: `redmineApiTypes.ts` is used instead of `RedmineApi.ts`
 because Windows is case-insensitive and would collide with
 `redmineApi.ts`.
 
-## Phase F — Accessibility pass 🟡 (in progress)
+## Phase F — Accessibility pass ✅
+
+**Commit:** `Phase F: Accessibility pass`
 
 - **`hooks/useDialogA11y.ts`** added. Centralizes:
   - ESC dismisses the dialog.
@@ -131,11 +133,12 @@ because Windows is case-insensitive and would collide with
   each gets a `dialogRef` plus an `aria-labelledby` pointing at the
   visible title element. Previously these used `aria-label` with a
   literal string.
-
-**Still to do in this phase:**
-- Arrow-key navigation on the Reports `[KPI Tracker | Issue Reports]`
-  tabs (currently `role="tab"` but no keyboard nav).
-- Test coverage for the new hook + applied behavior.
+- **Reports tab list** keyboard nav (WAI-ARIA tabs pattern):
+  - `ArrowLeft` / `ArrowRight` move selection, wrapping at the ends.
+  - Roving tabindex: selected tab gets `tabindex=0`, others get
+    `tabindex=-1`. Focus moves to the new tab so the focus ring tracks.
+- Tests: `useDialogA11y.test.tsx` (5), QuickEditPopup +2 cases, Reports
+  +3 cases.
 
 ## Phase G — Responsive sweep ⏳
 
@@ -161,7 +164,7 @@ the refactor, plus a final clean run of typecheck / lint / test / build.
 | Phase C | 32 | 238 | 0 |
 | Phase D | 32 | 238 | 0 |
 | Phase E | 32 | 238 | 0 |
-| Phase F (so far) | 32 | 238 | 0 |
+| Phase F | 33 | 248 | 0 |
 
 ## New files this session
 
