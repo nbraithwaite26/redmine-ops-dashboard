@@ -3,16 +3,21 @@ import { useLocation } from 'react-router-dom';
 import RightPanel from './RightPanel';
 import SecondaryNav from './SecondaryNav';
 import Sidebar from './Sidebar';
+import StatusBanner from './StatusBanner';
 import TopBar from './TopBar';
-import { getConnectionSettings, getCurrentUser } from '../services/redmineApi';
+import { useSyncBanner } from '../hooks/useSyncBanner';
+import { getConnectionSettings, getCurrentUser, syncWithRedmine } from '../services/redmineApi';
 
-const ROUTES_WITHOUT_RIGHT_PANEL = new Set(['/resources', '/project-builder', '/settings']);
+const ROUTES_WITHOUT_RIGHT_PANEL = new Set(['/resources', '/resources/personal', '/resources/team', '/project-builder', '/settings']);
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [apiConnected, setApiConnected] = useState(false);
   const [mockMode, setMockMode] = useState(true);
-  const [, setLastSync] = useState<string | null>(null);
   const location = useLocation();
+  const { banner, status, beginSync, reportSuccess, reportError } = useSyncBanner({
+    mockMode,
+  });
+  const isSyncing = status.kind === 'syncing';
 
   useEffect(() => {
     let cancelled = false;
@@ -22,13 +27,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       setMockMode(settings.mockMode);
       if (settings.mockMode) {
         await getCurrentUser();
-        setApiConnected(false); // Real API isn't connected; mock mode owns "connected" UX separately.
+        setApiConnected(false);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const handleSync = async () => {
+    beginSync();
+    try {
+      await syncWithRedmine();
+      reportSuccess();
+    } catch (err) {
+      reportError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
 
   const showRightPanel = !ROUTES_WITHOUT_RIGHT_PANEL.has(location.pathname);
 
@@ -37,8 +52,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar
         apiConnected={apiConnected}
         mockMode={mockMode}
-        onSync={(t) => setLastSync(t)}
+        isSyncing={isSyncing}
+        onClickSync={handleSync}
       />
+      {banner && (
+        <StatusBanner
+          severity={banner.severity}
+          message={banner.message}
+          onDismiss={banner.onDismiss}
+        />
+      )}
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <SecondaryNav />

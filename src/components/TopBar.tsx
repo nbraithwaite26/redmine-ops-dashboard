@@ -1,26 +1,13 @@
 import { Bell, ChevronDown, HelpCircle, RefreshCw, Search, Settings as SettingsIcon, User } from 'lucide-react';
-import { useState } from 'react';
-import { syncWithRedmine } from '../services/redmineApi';
 
 interface Props {
   apiConnected: boolean;
   mockMode: boolean;
-  onSync?: (syncedAt: string) => void;
+  isSyncing: boolean;
+  onClickSync: () => void;
 }
 
-export default function TopBar({ apiConnected, mockMode, onSync }: Props) {
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      const { syncedAt } = await syncWithRedmine();
-      onSync?.(syncedAt);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
+export default function TopBar({ apiConnected, mockMode, isSyncing, onClickSync }: Props) {
   return (
     <header
       className="bg-brand text-ink h-14 flex items-center px-4 gap-4 border-b border-brand-500/40"
@@ -57,12 +44,13 @@ export default function TopBar({ apiConnected, mockMode, onSync }: Props) {
 
       <div className="flex items-center gap-2">
         <button
-          onClick={handleSync}
-          className="btn bg-ink text-brand hover:bg-ink-soft"
+          onClick={onClickSync}
+          disabled={isSyncing}
+          className="btn bg-ink text-brand hover:bg-ink-soft disabled:opacity-70"
           aria-label="Sync with Redmine"
         >
-          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-          <span>{syncing ? 'Syncing…' : 'Sync with Redmine'}</span>
+          <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+          <span>{isSyncing ? 'Syncing…' : 'Sync with Redmine'}</span>
         </button>
         <span
           className={
