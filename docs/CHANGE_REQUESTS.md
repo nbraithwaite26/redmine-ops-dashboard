@@ -291,6 +291,42 @@ removes a hidden dependency.
 
 ---
 
+## #13 — Remove workspaces sidebar, full-height yellow rail, popout, branded chrome
+
+**Status:** ✅ Shipped
+
+**Request (combined):**
+- Yellow sidebar must extend all the way down to the viewport bottom.
+- Remove the white workspaces sidebar (SecondaryNav) entirely.
+- Add a visible popout/expand button on the yellow sidebar that works in
+  both expanded and collapsed states.
+- In dark mode the yellow sidebar (and TopBar, for consistency) becomes a
+  dark grey; the *active* nav tab is the part that's now yellow.
+- Add a slot in the TopBar's top-left corner for a PNG logo; change the
+  title text from "Redmine Operations Dashboard" to
+  "Aircraft Engineering Redmine".
+
+**Result:**
+- `SecondaryNav.tsx` + `SecondaryNav.test.tsx` deleted.
+- New CSS variables `--brand-surface`, `--brand-surface-text`,
+  `--brand-surface-hover`, `--brand-active-bg`, `--brand-active-text` in
+  both `:root` and `:root.dark`; sidebar and TopBar consume them via inline
+  styles. In dark mode the surface flips to dark grey and the active
+  highlight flips to yellow.
+- New `.sidebar-link` / `.sidebar-link-active` component classes.
+- Sidebar gets `h-full self-stretch`; the AppShell flex row uses
+  `items-stretch` so the rail fills the available height even when main
+  content is short.
+- Popout button is now always visible (data-testid `sidebar-popout`) and
+  swaps chevron direction based on collapsed state.
+- TopBar renders an `<img>` from `${BASE_URL}logo.png` with an `onError`
+  fallback to the ClipboardList "R" badge so the app still looks correct
+  when no logo is present. **To brand the deploy, drop your PNG at
+  `public/logo.png`.**
+- Title in HTML head + TopBar label both say "Aircraft Engineering Redmine".
+
+---
+
 ## #12 — Dark mode / light mode toggle
 
 **Status:** ✅ Shipped

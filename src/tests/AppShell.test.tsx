@@ -83,11 +83,46 @@ describe('<AppShell /> banner integration', () => {
       'data-collapsed',
       'true',
     );
-    expect(screen.getByTestId('secondary-nav')).toHaveAttribute(
-      'data-collapsed',
-      'true',
-    );
     expect(window.localStorage.getItem('rod.sidebar.collapsed')).toBe('1');
+  });
+
+  it('no longer renders the white workspaces panel (CR #13)', async () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('primary-sidebar'));
+    expect(screen.queryByTestId('secondary-nav')).toBeNull();
+  });
+
+  it('renders the Aircraft Engineering Redmine title in the TopBar', async () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText('Aircraft Engineering Redmine')).toBeInTheDocument(),
+    );
+  });
+
+  it('renders the logo slot — either the img or the fallback badge', async () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <div>page</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByText('Aircraft Engineering Redmine'));
+    const hasImg = screen.queryByTestId('logo-image');
+    const hasFallback = screen.queryByTestId('logo-fallback');
+    expect(hasImg ?? hasFallback).not.toBeNull();
   });
 
   it('pressing "[" toggles the sidebar via the keyboard shortcut', async () => {

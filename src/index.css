@@ -38,6 +38,15 @@
   --pill-blue-bg: #DBEAFE;    --pill-blue-fg: #1E40AF;
   --pill-yellow-bg: #FEF3C7;  --pill-yellow-fg: #92400E;
   --pill-gray-bg: #F3F4F6;    --pill-gray-fg: #1F2937;
+
+  /* Brand surfaces — TopBar and Sidebar. In light mode they're bright
+     yellow. In dark mode the surfaces become dark grey and the *active*
+     nav item gets the yellow highlight instead (per CR #14). */
+  --brand-surface: #FEDF00;
+  --brand-surface-text: #111827;
+  --brand-surface-hover: rgba(232, 203, 0, 0.30);
+  --brand-active-bg: #111827;
+  --brand-active-text: #FEDF00;
 }
 
 :root.dark {
@@ -70,6 +79,15 @@
   --pill-blue-bg: #1E3A8A;    --pill-blue-fg: #93C5FD;
   --pill-yellow-bg: #5C3A06;  --pill-yellow-fg: #FDE68A;
   --pill-gray-bg: #2A2A2A;    --pill-gray-fg: #D1D5DB;
+
+  /* Dark-mode inversion of the sidebar/TopBar palette: surface is dark
+     grey; the *active* nav item is the bright yellow highlight (so the
+     brand color is still visible, but only on the selected tab). */
+  --brand-surface: #1F1F1F;
+  --brand-surface-text: #E5E7EB;
+  --brand-surface-hover: rgba(255, 255, 255, 0.08);
+  --brand-active-bg: #FEDF00;
+  --brand-active-text: #111827;
 }
 
 html,
@@ -155,6 +173,20 @@ body {
     @apply pill;
     background-color: var(--pill-yellow-bg);
     color: var(--pill-yellow-fg);
+  }
+
+  /* Sidebar nav links — theme-aware via CSS variables. Active item is
+     dark navy on yellow surface in light mode, and yellow on dark grey
+     surface in dark mode (per CR #14). */
+  .sidebar-link {
+    color: var(--brand-surface-text);
+  }
+  .sidebar-link:hover {
+    background-color: var(--brand-surface-hover);
+  }
+  .sidebar-link-active {
+    background-color: var(--brand-active-bg);
+    color: var(--brand-active-text);
   }
 }
 

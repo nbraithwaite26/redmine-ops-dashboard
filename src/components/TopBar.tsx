@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import {
   Bell,
   ChevronDown,
+  ClipboardList,
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -33,9 +35,18 @@ export default function TopBar({
   effectiveTheme,
   onToggleTheme,
 }: Props) {
+  // Logo: drop your PNG at `public/logo.png` and it will appear here.
+  // Falls back to the ClipboardList badge when the file is missing.
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+  const [logoFailed, setLogoFailed] = useState(false);
+
   return (
     <header
-      className="bg-brand text-ink h-14 flex items-center px-4 gap-4 border-b border-brand-500/40"
+      style={{
+        backgroundColor: 'var(--brand-surface)',
+        color: 'var(--brand-surface-text)',
+      }}
+      className="h-14 flex items-center px-4 gap-4 border-b border-brand-500/40"
       role="banner"
     >
       <div className="flex items-center gap-2 min-w-[260px]">
@@ -44,21 +55,38 @@ export default function TopBar({
           aria-label="Toggle sidebar"
           aria-pressed={sidebarCollapsed}
           title="Toggle sidebar ([)"
-          className="p-1.5 rounded hover:bg-brand-500/30"
+          className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]"
         >
           {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </button>
-        <div className="h-8 w-8 rounded bg-ink text-brand flex items-center justify-center font-bold">
-          R
-        </div>
-        <div className="font-semibold tracking-tight">Redmine Operations Dashboard</div>
+        {logoFailed ? (
+          <div
+            style={{
+              backgroundColor: 'var(--brand-active-bg)',
+              color: 'var(--brand-active-text)',
+            }}
+            className="h-8 w-8 rounded flex items-center justify-center font-bold"
+            data-testid="logo-fallback"
+          >
+            <ClipboardList size={16} />
+          </div>
+        ) : (
+          <img
+            src={logoSrc}
+            alt="Aircraft Engineering Redmine logo"
+            data-testid="logo-image"
+            className="h-8 w-8 object-contain rounded"
+            onError={() => setLogoFailed(true)}
+          />
+        )}
+        <div className="font-semibold tracking-tight">Aircraft Engineering Redmine</div>
       </div>
 
       <nav className="flex items-center gap-1 text-sm font-medium">
-        <button className="px-3 py-1.5 rounded hover:bg-brand-500/30">All</button>
-        <button className="px-3 py-1.5 rounded hover:bg-brand-500/30">Favorites</button>
-        <button className="px-3 py-1.5 rounded hover:bg-brand-500/30">History</button>
-        <button className="px-3 py-1.5 rounded hover:bg-brand-500/30">Workspaces</button>
+        <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">All</button>
+        <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">Favorites</button>
+        <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">History</button>
+        <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">Workspaces</button>
       </nav>
 
       <div className="flex-1 flex justify-center">
@@ -68,7 +96,7 @@ export default function TopBar({
           </span>
           <Search size={14} className="text-ink-muted" />
           <input
-            className="bg-transparent outline-none text-sm flex-1 placeholder:text-ink-muted"
+            className="bg-transparent outline-none text-sm flex-1 placeholder:text-ink-muted text-ink"
             placeholder="Search issues, projects, people…"
             aria-label="Global search"
           />
@@ -80,7 +108,11 @@ export default function TopBar({
         <button
           onClick={onClickSync}
           disabled={isSyncing}
-          className="btn bg-ink text-brand hover:bg-ink-soft disabled:opacity-70"
+          style={{
+            backgroundColor: 'var(--brand-active-bg)',
+            color: 'var(--brand-active-text)',
+          }}
+          className="btn disabled:opacity-70 hover:opacity-90"
           aria-label="Sync with Redmine"
         >
           <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
@@ -101,19 +133,25 @@ export default function TopBar({
         <ThemeToggle
           effectiveTheme={effectiveTheme}
           onToggle={onToggleTheme}
-          className="p-1.5 rounded hover:bg-brand-500/30"
+          className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]"
         />
-        <button className="p-1.5 rounded hover:bg-brand-500/30" aria-label="Help">
+        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Help">
           <HelpCircle size={18} />
         </button>
-        <button className="p-1.5 rounded hover:bg-brand-500/30" aria-label="Notifications">
+        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Notifications">
           <Bell size={18} />
         </button>
-        <button className="p-1.5 rounded hover:bg-brand-500/30" aria-label="Settings">
+        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Settings">
           <SettingsIcon size={18} />
         </button>
-        <button className="p-1 rounded-full hover:bg-brand-500/30" aria-label="User menu">
-          <div className="h-8 w-8 rounded-full bg-ink text-brand flex items-center justify-center">
+        <button className="p-1 rounded-full transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="User menu">
+          <div
+            style={{
+              backgroundColor: 'var(--brand-active-bg)',
+              color: 'var(--brand-active-text)',
+            }}
+            className="h-8 w-8 rounded-full flex items-center justify-center"
+          >
             <User size={16} />
           </div>
         </button>

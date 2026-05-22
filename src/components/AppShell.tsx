@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import RightPanel from './RightPanel';
-import SecondaryNav from './SecondaryNav';
 import Sidebar from './Sidebar';
 import StatusBanner from './StatusBanner';
 import TopBar from './TopBar';
@@ -84,9 +83,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           onDismiss={banner.onDismiss}
         />
       )}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 items-stretch">
         <Sidebar collapsed={collapsed} onToggle={toggle} />
-        <SecondaryNav collapsed={collapsed} />
         <main className="flex-1 min-w-0 overflow-y-auto">
           <div className="max-w-[1400px] mx-auto p-6">{children}</div>
         </main>
