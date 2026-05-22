@@ -6,7 +6,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added — Phase 1: foundations
+- **CR #11** — `lib/format.ts` is now pure. `isOverdue`/`daysOverdue` take an
+  optional `today` parameter (defaults to `new Date()`); the pinned
+  `MOCK_TODAY = 2026-05-21` is exported separately for demo reproducibility.
+- **CR #2** — Single-active workspace nav and `/resources` route split:
+  - `/resources` → multi-section reorderable view (default)
+  - `/resources/personal` and `/resources/team` → legacy single-section
+    routes kept for deep links
+  - `/reports` stays as one route with internal tabs (KPI Tracker / Issue
+    Reports); the workspaces panel disambiguates via `?tab=` query.
+- **CR #5** — Metric cards data-driven via a new `DashboardMetric` type +
+  three builder functions (`buildDashboardMetrics`, `buildReportMetrics`,
+  `buildTimeMetrics`). Card config is no longer repeated JSX across pages.
+
+### Added — Phase 2: visual upgrades
+- **CR #6** — `DashboardCard` metric variant renders a CSS conic-gradient
+  ring (from a new `donutGradient` helper in `lib/visual.ts`). SVG
+  `DonutChart` stays available for the legacy `visual` slot.
+- **CR #8** — Inline `% Done` progress bar replaces the plain percentage
+  text in `IssueTable` via a new `ProgressBar` component with
+  `role="progressbar"` + `aria-valuemin/max/now`.
+- **CR #9** — New `PriorityPill` component shows an `AlertTriangle` icon
+  inside the pill for `High`, `Urgent`, and `Immediate` priorities.
+
+### Added — Phase 3: app-shell behaviors
+- **CR #10** — `StatusBanner` below TopBar driven by a new `useSyncBanner`
+  state machine. Mock-mode warning (dismissible via sessionStorage) →
+  syncing → success (auto-reverts after 5s) → error (dismissible).
+- **CR #1** — Collapsible sidebar via `useSidebarCollapse`. Yellow icon
+  rail widens to show labels when expanded; the workspaces panel collapses
+  to a thin icon-only strip. Toggle lives in the TopBar (with `[`
+  keyboard shortcut) and as an in-sidebar chevron. State persists in
+  localStorage.
+
+### Added — Phase 4: navigation restructure
+- **CR #3+#4 helpers** — `useSectionOrder` hook (persistent ordered list of
+  section ids), `ReorderableSection` wrapper with up/down arrows, and
+  `GroupedTaskTable` (expandable per-user rows with weekly hours +
+  percentage).
+- **CR #3+#4 (a)** — New pages: `Tasks` (my + team in one view),
+  `Calendar` (month grid), `Hours` landing + `MyHours` + `TeamHours`,
+  `AllProjects` (browse every project including archived). `Tasks.tsx`
+  replaces `MyTasks.tsx` as the canonical route at `/tasks`.
+- **CR #3+#4 (b)** — Reports gains internal tabs (KPI Tracker, Issue
+  Reports). Resource Management at `/resources` becomes a multi-section
+  reorderable page composed of Personal + Team sections.
+- **CR #3+#4 (c)** — Primary yellow rail rewritten to 9 items: Home,
+  Dashboard, Tasks, Calendar, Hours, Directory, All Projects, Projects
+  (assigned to me), Settings. Demoted items (Past Due, Project Builder,
+  Resource Mgmt, Time Tracking, Reports) remain reachable via the
+  workspaces panel.
+
+### Added — Phase 5: Home redesign
+- **CR #7** — Home is now a Codex-style landing: slate gradient hero with
+  personalized greeting + workspace selector → 4-card headline metric row
+  → "Recently opened workspaces" grid → Tools section. The previous
+  "Recently opened files" section is removed. `/dashboard` remains as the
+  operations console.
+
+### Tests
+- 199 passing across 26 files (started at 20 across 6 files).
+- Per-CR coverage standard: unit tests for new pure functions, functional
+  tests for new component behavior, and at least one integration test
+  per CR that touches navigation, state, or data flow.
+- New test files: `format.test.ts`, `dashboardMetrics.test.ts`,
+  `visual.test.ts`, `ProgressBar.test.tsx`, `PriorityPill.test.tsx`,
+  `StatusBanner.test.tsx`, `useSyncBanner.test.ts`, `AppShell.test.tsx`,
+  `Sidebar.test.tsx`, `useSidebarCollapse.test.ts`,
+  `useSectionOrder.test.ts`, `ReorderableSection.test.tsx`,
+  `GroupedTaskTable.test.tsx`, `sectionReorder.integration.test.tsx`,
+  `newPages.test.tsx`, `Reports.test.tsx`, `ResourceManagement.test.tsx`,
+  `RecentlyOpenedGrid.test.tsx`, `Home.test.tsx`,
+  `DashboardCard.test.tsx`.
 
 ## [0.1.0] — 2026-05-21
 

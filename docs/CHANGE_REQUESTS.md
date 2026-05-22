@@ -16,7 +16,7 @@ Status legend:
 
 ## #1 — Collapsible left sidebar
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Make the left sidebar collapsible. When expanded, the workspace
 names are visible (current behavior). When collapsed, only the symbols/icons
@@ -42,7 +42,7 @@ are shown.
 
 ## #2 — Single-active-item in the workspaces list
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Multiple items in the workspaces panel light up at once when
 visiting routes that have duplicate entries pointing to them. Only one item
@@ -66,7 +66,7 @@ The user will choose at coding time.
 
 ## #3 — Sidebar placeholders for screenshot views
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Using the supplied screenshots (Directory grid, Past Due Tasks
 table, My Tasks table, Personal Resource Management Gantt, and My/Team
@@ -102,7 +102,7 @@ each of those views has a home in the app.
 
 ## #4 — Sidebar placeholders for Dashboard, Directory, Tasks, Calendar, Hours, All Projects
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Add sidebar entries for Dashboard, Directory, Tasks, Calendar,
 Hours, and All Projects.
@@ -150,7 +150,7 @@ and why) is in chat history; not re-quoting here to keep this log scannable.
 
 ## #5 — Data-driven metric cards via `DashboardMetric[]`
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Replace the per-page JSX repetition of `<DashboardCard …>` on
 the Dashboard / Reports / Time Tracking pages with a typed
@@ -176,7 +176,7 @@ gets a real `progress` percentage independent of the displayed value.
 
 ## #6 — Conic-gradient donut visual
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Replace the SVG `DonutChart` inside `DashboardCard` with a CSS
 `conic-gradient` ring driven by `DashboardMetric.progress`. Smaller DOM,
@@ -196,7 +196,7 @@ Default visual switches to the conic ring.
 
 ## #7 — Restructure Home as Codex-style landing (Option C)
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Redesign `/home` to be a friendly landing page modeled on
 Codex's Dashboard layout. Keep `/dashboard` as a separate operations console
@@ -227,7 +227,7 @@ grid.
 
 ## #8 — Inline % Done progress bar in IssueTable
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Replace the plain `40%` text in the IssueTable's `% Done`
 column with a small horizontal bar (green fill) plus the number. Visually
@@ -242,7 +242,7 @@ richer at a glance.
 
 ## #9 — Icon-in-pill for High / Urgent / Immediate priority
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Render an `AlertTriangle` icon inside the priority pill when
 the priority is `High`, `Urgent`, or `Immediate`. Increases scannability
@@ -259,7 +259,7 @@ for the rows that matter most.
 
 ## #10 — Sticky sync-status / mock-mode banner under TopBar
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Thin notice bar shown app-wide just below the TopBar when in
 mock mode or after a sync (`Mock mode is active` / `Mock sync completed
@@ -276,7 +276,7 @@ itself, which is easy to miss.
 
 ## #11 — Make `lib/format.ts` pure (no module-level `TODAY`)
 
-**Status:** 📝 Scaffold plan approved (see [SCAFFOLD_PLAN.md](./SCAFFOLD_PLAN.md))
+**Status:** ✅ Shipped
 
 **Request:** Remove the module-level `TODAY = new Date('2026-05-21')`
 global. `isOverdue` and `daysOverdue` should take `today` as a parameter
