@@ -100,6 +100,216 @@ each of those views has a home in the app.
 
 ---
 
+## #4 — Sidebar placeholders for Dashboard, Directory, Tasks, Calendar, Hours, All Projects
+
+**Status:** 📥 Collected
+
+**Request:** Add sidebar entries for Dashboard, Directory, Tasks, Calendar,
+Hours, and All Projects.
+
+**Current state per item:**
+
+| Item | Current state |
+| --- | --- |
+| Dashboard | Exists at `/dashboard` |
+| Directory | Exists at `/directory` |
+| Tasks | Exists at `/my-tasks` (currently "My Tasks") |
+| Calendar | **New placeholder** |
+| Hours | New — likely combines My/Team Hours; relates to existing `/time` |
+| All Projects | New — distinct from current `/projects`? Or rename? |
+
+**Open questions for the scaffold plan:**
+- Replace vs. extend — does this fully replace the existing sidebar items,
+  or add alongside them?
+- Which sidebar — primary yellow icon rail, secondary workspaces list, or
+  both?
+- "Hours" — new page or rename of existing Time Tracking?
+- "All Projects" — replaces the current Projects link, or a broader "every
+  project in Redmine" view distinct from the active-portfolio view?
+- "Tasks" — rename "My Tasks" to "Tasks", or broader scope (all tasks across
+  the org)?
+
+**Relationship to #3:** Overlaps heavily — both add sidebar entries for
+similar items. At scaffold-plan time, #3 and #4 will be merged into a
+single sidebar restructure decision.
+
+---
+
+# Codex-comparison cherry-picks (#5–#11)
+
+The next seven items come from a side-by-side review of an alternative UI
+that Codex generated for the same brief. Codex's version was a higher-
+fidelity static mockup with no routing, no functional editing, and a single
+test file — its architecture is **not** being adopted. These are the
+specific visual / data-shape upgrades that are worth pulling in.
+
+The full comparison rationale (what's better in each version, what to skip
+and why) is in chat history; not re-quoting here to keep this log scannable.
+
+---
+
+## #5 — Data-driven metric cards via `DashboardMetric[]`
+
+**Status:** 📥 Collected
+
+**Request:** Replace the per-page JSX repetition of `<DashboardCard …>` on
+the Dashboard / Reports / Time Tracking pages with a typed
+`DashboardMetric[]` array in `data/mockData.ts`. Card config (title, value,
+total, progress %, status pill text, color tone, drill-to route) becomes
+data, not JSX.
+
+**Why:** Eliminates the current value/total/donut-ratio mismatch where the
+donut math gets confused by unit differences (e.g. `1/40` hours). Each card
+gets a real `progress` percentage independent of the displayed value.
+
+**Files:**
+- `src/types/redmine.ts` — add `DashboardMetric` type
+- `src/data/mockData.ts` — add `dashboardMetrics`, `reportMetrics`,
+  `timeMetrics` arrays
+- `src/pages/Dashboard.tsx` — render from array
+- `src/pages/Reports.tsx` — same
+- `src/pages/TimeTracking.tsx` — same
+
+**Size:** Small.
+
+---
+
+## #6 — Conic-gradient donut visual
+
+**Status:** 📥 Collected
+
+**Request:** Replace the SVG `DonutChart` inside `DashboardCard` with a CSS
+`conic-gradient` ring driven by `DashboardMetric.progress`. Smaller DOM,
+animates for free, less code per card.
+
+**Note:** The existing `DonutChart` component stays available as an opt-in
+for cases that need precise stroke control (custom thickness, caps, etc.).
+Default visual switches to the conic ring.
+
+**Files:**
+- `src/components/DashboardCard.tsx`
+- `src/components/DonutChart.tsx` (kept, no longer default)
+
+**Size:** Small.
+
+---
+
+## #7 — Restructure Home as Codex-style landing (Option C)
+
+**Status:** 📥 Collected
+
+**Request:** Redesign `/home` to be a friendly landing page modeled on
+Codex's Dashboard layout. Keep `/dashboard` as a separate operations console
+(no merge).
+
+**Final shape of `/home`:**
+1. Slate gradient hero with greeting (`Welcome back, <Name>`) and a
+   workspace selector dropdown.
+2. A small (3–4 card) row of headline metric cards — subset of Dashboard's
+   full grid, sourced from `dashboardMetrics`.
+3. "Recently opened workspaces" grid — 8 cards with letter avatar, type
+   label, short description, bookmark icon.
+4. Existing **Tools** card section retained (`/home` already has this).
+5. Existing **Recently opened files** section retained (or merged into #3 —
+   decide at scaffold-plan time).
+
+**Why:** The original brief called out a Studio-style welcome page; this
+restructure gets closer to that reference without losing the existing Tools
+grid.
+
+**Files:**
+- `src/pages/Home.tsx`
+- Possibly a new `RecentlyOpenedGrid` component
+
+**Size:** Medium.
+
+---
+
+## #8 — Inline % Done progress bar in IssueTable
+
+**Status:** 📥 Collected
+
+**Request:** Replace the plain `40%` text in the IssueTable's `% Done`
+column with a small horizontal bar (green fill) plus the number. Visually
+richer at a glance.
+
+**Files:**
+- `src/components/IssueTable.tsx`
+
+**Size:** Small.
+
+---
+
+## #9 — Icon-in-pill for High / Urgent / Immediate priority
+
+**Status:** 📥 Collected
+
+**Request:** Render an `AlertTriangle` icon inside the priority pill when
+the priority is `High`, `Urgent`, or `Immediate`. Increases scannability
+for the rows that matter most.
+
+**Files:**
+- `src/lib/format.ts` (`priorityPill` helper signature change, or a new
+  `PriorityPill` component)
+- `src/components/IssueTable.tsx` (consume the new render)
+
+**Size:** Small.
+
+---
+
+## #10 — Sticky sync-status / mock-mode banner under TopBar
+
+**Status:** 📥 Collected
+
+**Request:** Thin notice bar shown app-wide just below the TopBar when in
+mock mode or after a sync (`Mock mode is active` / `Mock sync completed
+just now`). Currently this status only lives as a small pill in the TopBar
+itself, which is easy to miss.
+
+**Files:**
+- `src/components/AppShell.tsx`
+- Possibly a new `StatusBanner` component
+
+**Size:** Small.
+
+---
+
+## #11 — Make `lib/format.ts` pure (no module-level `TODAY`)
+
+**Status:** 📥 Collected
+
+**Request:** Remove the module-level `TODAY = new Date('2026-05-21')`
+global. `isOverdue` and `daysOverdue` should take `today` as a parameter
+(with a default if needed for ergonomics). Improves test determinism and
+removes a hidden dependency.
+
+**Files:**
+- `src/lib/format.ts`
+- All call sites that rely on the default
+
+**Size:** Small.
+
+---
+
+# Codex-comparison explicit skips
+
+The following Codex patterns were considered and **rejected** because
+adopting them would regress the current shipping app. Documented here so
+the rationale isn't lost.
+
+| Skipped | Why |
+| --- | --- |
+| Codex's `useState` page switcher in App.tsx | Regression — kills URLs, back button, deep links |
+| Codex's `xl:block` / `2xl:block` responsive chrome hiding | Regression — secondary nav and right panel vanish on a 1366px laptop |
+| Codex's `Issue.assignee: User` (no null) | Regression — makes unassigned issues impossible |
+| Codex's `IssueStatus: string` / `Tracker: string` | Regression — loses type safety |
+| Codex's non-persistent mock API | Regression — UI wouldn't reflect edits |
+| Codex's stripped-down IssueTable (no sort, no select, no bulk update) | Regression — major feature loss |
+| Codex's duplicate-key bug in `Sidebar` (Home + Dashboard share key) | Bug, not a feature |
+| Codex's single test file (`format.test.ts`) | Regression — current repo has 7 |
+
+---
+
 ## Workflow
 
 1. User sends a UI change request (often with screenshots).
