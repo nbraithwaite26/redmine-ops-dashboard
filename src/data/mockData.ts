@@ -1,4 +1,5 @@
 import type {
+  DashboardMetric,
   DirectoryLink,
   Issue,
   Project,
@@ -490,3 +491,265 @@ export const mockTimeActivities: string[] = [
   'Documentation',
   'Meeting',
 ];
+
+// ─── Dashboard metric builders ───────────────────────────────────────────
+//
+// These functions take the data the page already has on hand (issues, time
+// totals, etc.) and produce the typed DashboardMetric array used to render
+// metric cards. Centralising card config keeps the page bodies short and
+// lets the same metric show up on multiple pages (e.g. weekly hours on
+// Dashboard, Reports, and Time Tracking) without three copies of the JSX.
+
+interface MetricInputs {
+  myIssues: Issue[];
+  allIssues: Issue[];
+  pastDueCount: number;
+  weeklyHours: { logged: number; target: number };
+  teamHours: { logged: number; target: number };
+}
+
+const safePercent = (value: number, total: number): number => {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((value / total) * 100)));
+};
+
+export function buildDashboardMetrics({
+  myIssues,
+  allIssues,
+  pastDueCount,
+  weeklyHours,
+  teamHours,
+}: MetricInputs): DashboardMetric[] {
+  const inProgressCount = myIssues.filter((i) => i.status === 'In Progress').length;
+  const unassignedCount = allIssues.filter((i) => !i.assignee).length;
+  const waitingCount = allIssues.filter((i) => i.status === 'Feedback').length;
+  const projectsAtRisk = 2; // mock — derived from project status in real impl
+  const openKpis = 7; // mock — would come from a KPI tracker plugin
+
+  return [
+    {
+      id: 'tasks-assigned',
+      title: 'Tasks assigned to you',
+      value: myIssues.length,
+      progress: safePercent(myIssues.length, Math.max(myIssues.length, 20)),
+      statusLabel: `${inProgressCount} In Progress`,
+      statusColor: 'blue',
+      color: '#8B5CF6',
+      caption: 'open',
+      route: '/my-tasks',
+    },
+    {
+      id: 'past-due',
+      title: 'Past due tasks',
+      value: pastDueCount,
+      progress: safePercent(pastDueCount, Math.max(pastDueCount + 4, 10)),
+      statusLabel: 'Action needed',
+      statusColor: 'red',
+      color: '#EF4444',
+      caption: 'overdue',
+      route: '/past-due',
+    },
+    {
+      id: 'hours-week',
+      title: 'Hours this week',
+      value: weeklyHours.logged,
+      total: weeklyHours.target,
+      progress: safePercent(weeklyHours.logged, weeklyHours.target),
+      statusLabel: `${weeklyHours.target}h target`,
+      statusColor: 'gray',
+      color: '#10B981',
+      caption: 'logged',
+      route: '/time',
+    },
+    {
+      id: 'team-hours-week',
+      title: 'Team hours this week',
+      value: teamHours.logged,
+      total: teamHours.target,
+      progress: safePercent(teamHours.logged, teamHours.target),
+      statusLabel: `${teamHours.target}h target`,
+      statusColor: 'gray',
+      color: '#F59E0B',
+      caption: 'team',
+      route: '/reports',
+    },
+    {
+      id: 'unassigned',
+      title: 'Unassigned tasks',
+      value: unassignedCount,
+      progress: safePercent(unassignedCount, Math.max(unassignedCount, 8)),
+      statusLabel: 'Triage queue',
+      statusColor: 'orange',
+      color: '#F97316',
+      caption: 'unassigned',
+    },
+    {
+      id: 'at-risk',
+      title: 'Projects at risk',
+      value: projectsAtRisk,
+      progress: safePercent(projectsAtRisk, 8),
+      statusLabel: 'Schedule slipping',
+      statusColor: 'red',
+      color: '#EF4444',
+      caption: 'at risk',
+      route: '/projects',
+    },
+    {
+      id: 'waiting',
+      title: 'Tasks waiting for update',
+      value: waitingCount,
+      progress: safePercent(waitingCount, Math.max(waitingCount, 6)),
+      statusLabel: 'Awaiting response',
+      statusColor: 'yellow',
+      color: '#EAB308',
+      caption: 'awaiting',
+    },
+    {
+      id: 'open-kpis',
+      title: 'Open KPIs',
+      value: openKpis,
+      progress: safePercent(openKpis, 12),
+      statusLabel: 'Quarterly view',
+      statusColor: 'blue',
+      color: '#3B82F6',
+      caption: 'open',
+      route: '/reports',
+    },
+  ];
+}
+
+interface ReportMetricInputs {
+  weeklyHours: { logged: number; target: number };
+  teamHours: { logged: number; target: number };
+  resolvedCount: number;
+  openKpis: number;
+  overloadedCount: number;
+  timeEntries: number;
+}
+
+export function buildReportMetrics({
+  weeklyHours,
+  teamHours,
+  resolvedCount,
+  openKpis,
+  overloadedCount,
+  timeEntries,
+}: ReportMetricInputs): DashboardMetric[] {
+  return [
+    {
+      id: 'my-hours-week',
+      title: 'My hours this week',
+      value: weeklyHours.logged,
+      total: weeklyHours.target,
+      progress: safePercent(weeklyHours.logged, weeklyHours.target),
+      statusLabel: 'Target 40h',
+      statusColor: 'gray',
+      color: '#10B981',
+    },
+    {
+      id: 'team-hours-week',
+      title: 'Team hours this week',
+      value: teamHours.logged,
+      total: teamHours.target,
+      progress: safePercent(teamHours.logged, teamHours.target),
+      statusLabel: 'Target 360h',
+      statusColor: 'gray',
+      color: '#F59E0B',
+    },
+    {
+      id: 'resolved',
+      title: 'Resolved issues',
+      value: resolvedCount,
+      progress: safePercent(resolvedCount, Math.max(resolvedCount + 5, 10)),
+      statusLabel: 'This quarter',
+      statusColor: 'green',
+      color: '#10B981',
+    },
+    {
+      id: 'open-kpis',
+      title: 'Open KPIs',
+      value: openKpis,
+      progress: safePercent(openKpis, 12),
+      statusLabel: 'Quarterly',
+      statusColor: 'blue',
+      color: '#3B82F6',
+    },
+    {
+      id: 'overloaded',
+      title: 'Overloaded engineers',
+      value: overloadedCount,
+      progress: safePercent(overloadedCount, Math.max(overloadedCount + 3, 8)),
+      statusLabel: 'Watchlist',
+      statusColor: 'red',
+      color: '#EF4444',
+    },
+    {
+      id: 'entries',
+      title: 'Time entries',
+      value: timeEntries,
+      progress: safePercent(timeEntries, Math.max(timeEntries, 20)),
+      statusLabel: 'This period',
+      statusColor: 'blue',
+      color: '#3B82F6',
+    },
+  ];
+}
+
+interface TimeMetricInputs {
+  weeklyHours: { logged: number; target: number };
+  teamHours: { logged: number; target: number };
+  entryCount: number;
+  averageHours: number;
+  range: string;
+}
+
+export function buildTimeMetrics({
+  weeklyHours,
+  teamHours,
+  entryCount,
+  averageHours,
+  range,
+}: TimeMetricInputs): DashboardMetric[] {
+  return [
+    {
+      id: 'my-hours',
+      title: 'My hours this week',
+      value: weeklyHours.logged,
+      total: weeklyHours.target,
+      progress: safePercent(weeklyHours.logged, weeklyHours.target),
+      statusLabel: 'Target 40h',
+      statusColor: 'gray',
+      color: '#10B981',
+      caption: 'logged',
+    },
+    {
+      id: 'team-hours',
+      title: 'Team hours this week',
+      value: teamHours.logged,
+      total: teamHours.target,
+      progress: safePercent(teamHours.logged, teamHours.target),
+      statusLabel: 'Target 360h',
+      statusColor: 'gray',
+      color: '#F59E0B',
+      caption: 'team',
+    },
+    {
+      id: 'entries',
+      title: 'Entries this period',
+      value: entryCount,
+      progress: safePercent(entryCount, Math.max(entryCount, 30)),
+      statusLabel: `${range} view`,
+      statusColor: 'blue',
+      color: '#3B82F6',
+    },
+    {
+      id: 'avg',
+      title: 'Average per entry',
+      value: `${averageHours.toFixed(1)}h`,
+      progress: safePercent(averageHours, 8),
+      statusLabel: 'Across team',
+      statusColor: 'gray',
+      color: '#6366F1',
+    },
+  ];
+}

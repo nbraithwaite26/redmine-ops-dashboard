@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import DashboardCard from '../components/DashboardCard';
-import DonutChart from '../components/DonutChart';
 import {
   getIssues,
   getResourceAllocations,
@@ -10,6 +9,7 @@ import {
   getWeeklyHours,
 } from '../services/redmineApi';
 import type { Issue, ResourceAllocation, TimeEntry } from '../types/redmine';
+import { buildReportMetrics } from '../data/mockData';
 
 export default function Reports() {
   const [my, setMy] = useState({ logged: 0, target: 40 });
@@ -39,6 +39,15 @@ export default function Reports() {
   const openKpis = issues.filter((i) => i.tracker === 'KPI').length;
   const overloadedCount = allocations.filter((a) => a.isOverloaded).length;
 
+  const metrics = buildReportMetrics({
+    weeklyHours: my,
+    teamHours: team,
+    resolvedCount,
+    openKpis,
+    overloadedCount,
+    timeEntries: timeEntries.length,
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -47,56 +56,9 @@ export default function Reports() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <DashboardCard
-          title="My hours this week"
-          status="Target 40h"
-          statusColor="gray"
-          visual={
-            <DonutChart
-              value={my.logged}
-              total={my.target}
-              color="#10B981"
-              label={`${my.logged}/${my.target}`}
-            />
-          }
-        />
-        <DashboardCard
-          title="Team hours this week"
-          status="Target 360h"
-          statusColor="gray"
-          visual={
-            <DonutChart
-              value={team.logged}
-              total={team.target}
-              color="#F59E0B"
-              label={`${team.logged}/${team.target}`}
-            />
-          }
-        />
-        <DashboardCard
-          title="Resolved issues"
-          status="This quarter"
-          statusColor="green"
-          visual={<DonutChart value={resolvedCount} total={Math.max(resolvedCount + 5, 10)} color="#10B981" />}
-        />
-        <DashboardCard
-          title="Open KPIs"
-          status="Quarterly"
-          statusColor="blue"
-          visual={<DonutChart value={openKpis} total={12} color="#3B82F6" />}
-        />
-        <DashboardCard
-          title="Overloaded engineers"
-          status="Watchlist"
-          statusColor="red"
-          visual={<DonutChart value={overloadedCount} total={Math.max(overloadedCount + 3, 8)} color="#EF4444" />}
-        />
-        <DashboardCard
-          title="Time entries"
-          status="This period"
-          statusColor="blue"
-          visual={<div className="text-3xl font-semibold">{timeEntries.length}</div>}
-        />
+        {metrics.map((metric) => (
+          <DashboardCard key={metric.id} metric={metric} />
+        ))}
       </div>
 
       <div className="card p-4">

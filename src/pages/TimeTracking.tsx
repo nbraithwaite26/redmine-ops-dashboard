@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Plus, Save, Trash2, X } from 'lucide-react';
 import DashboardCard from '../components/DashboardCard';
-import DonutChart from '../components/DonutChart';
 import {
   createTimeEntry,
   deleteTimeEntry,
@@ -10,6 +9,7 @@ import {
   getWeeklyHours,
 } from '../services/redmineApi';
 import {
+  buildTimeMetrics,
   mockIssues,
   mockProjects,
   mockTimeActivities,
@@ -88,52 +88,18 @@ export default function TimeTracking() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <DashboardCard
-          title="My hours this week"
-          status="Target 40h"
-          statusColor="gray"
-          visual={
-            <DonutChart
-              value={my.logged}
-              total={my.target}
-              color="#10B981"
-              label={`${my.logged}/${my.target}`}
-              caption="logged"
-            />
-          }
-        />
-        <DashboardCard
-          title="Team hours this week"
-          status="Target 360h"
-          statusColor="gray"
-          visual={
-            <DonutChart
-              value={team.logged}
-              total={team.target}
-              color="#F59E0B"
-              label={`${team.logged}/${team.target}`}
-              caption="team"
-            />
-          }
-        />
-        <DashboardCard
-          title="Entries this period"
-          status={`${range} view`}
-          statusColor="blue"
-          visual={<div className="text-3xl font-semibold">{entries.length}</div>}
-        />
-        <DashboardCard
-          title="Average per entry"
-          status="Across team"
-          statusColor="gray"
-          visual={
-            <div className="text-3xl font-semibold">
-              {entries.length === 0
-                ? '0h'
-                : `${(entries.reduce((s, e) => s + e.hours, 0) / entries.length).toFixed(1)}h`}
-            </div>
-          }
-        />
+        {buildTimeMetrics({
+          weeklyHours: my,
+          teamHours: team,
+          entryCount: entries.length,
+          averageHours:
+            entries.length === 0
+              ? 0
+              : entries.reduce((s, e) => s + e.hours, 0) / entries.length,
+          range,
+        }).map((metric) => (
+          <DashboardCard key={metric.id} metric={metric} />
+        ))}
       </div>
 
       {grouped.map(({ label, entries }) => (

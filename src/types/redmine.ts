@@ -127,3 +127,30 @@ export interface ConnectionStatus {
   currentUser: User | null;
   message: string;
 }
+
+/**
+ * Single source of truth for a dashboard metric card. `progress` is the
+ * donut fill (0–100) and is intentionally independent of `value`/`total`
+ * because the two often have different units (e.g. "12 tasks" can't drive
+ * a percentage by itself, but "12 of 20" can).
+ */
+export interface DashboardMetric {
+  id: string;
+  title: string;
+  /** Big number shown in the center of the card. */
+  value: string | number;
+  /** Optional "/ N" denominator shown alongside the value. */
+  total?: string | number;
+  /** 0–100, drives donut fill. */
+  progress: number;
+  /** Status pill text. */
+  statusLabel?: string;
+  /** Status pill color. */
+  statusColor?: 'green' | 'orange' | 'red' | 'blue' | 'gray' | 'yellow';
+  /** Hex color for the donut fill. */
+  color: string;
+  /** Optional sub-caption underneath the donut. */
+  caption?: string;
+  /** If set, the card becomes clickable and navigates here. */
+  route?: string;
+}
