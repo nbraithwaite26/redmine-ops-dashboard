@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactor session (Phases 0 → H)
+
+A focused review-and-optimize pass after CR #14. Behavior-preserving;
+no new product features. See [`docs/REFACTOR_LOG.md`](docs/REFACTOR_LOG.md)
+for the per-phase notes.
+
+- **Phase 0** — Theme-aware logo swap: light loads `logo.png`, dark
+  loads `logo-white.png`, with per-variant `onError` fallback.
+- **Phase A** — Centralized the pinned demo date `MOCK_TODAY` and
+  cleared the 2 outstanding lint warnings (PriorityPill duplicate
+  helper, ResourceTimeline memo dep).
+- **Phase B** — Three reusable hooks: `useAsyncResource`,
+  `useIssueEditor`, `useTableState`. Replaced ~10 pages' worth of
+  copy-pasted load + edit + table state.
+- **Phase C** — Split large components: `IssueTable` (309 → ~210
+  lines, extracted `IssueRow`); `TimeTracking` (310 → ~180 lines,
+  extracted `AddTimeModal`).
+- **Phase D** — Five duplicated inline `<style>` blocks consolidated
+  into a single `@layer components` rule in `index.css` covering
+  `.form-input`, `.modal-input`, `.builder-input`, `.settings-input`,
+  `.input`. Side benefit: inputs now respect dark mode automatically.
+- **Phase E** — `services/redmineApi.ts` split into a mock/real
+  facade: `redmineApiTypes.ts` (interface), `mockRedmineApi.ts`,
+  `realRedmineApi.ts` (stub), and a thin facade that picks impl by
+  `VITE_MOCK_MODE`. Call sites unchanged.
+- **Phase F** — Accessibility pass. New `useDialogA11y` hook (ESC
+  dismisses, autofocus first focusable, focus restoration). Applied
+  to TicketDrawer, QuickEditPopup, AddTimeModal. Reports tablist
+  gained WAI-ARIA roving-tabindex + ArrowLeft/Right nav.
+- **Phase G** — Responsive sweep. Sidebar overlays content below
+  `md`, becomes sticky/push at `>=md`. New `useMediaQuery` hook.
+  Mobile backdrop closes the rail when tapped. RightPanel is
+  `hidden xl:flex`. TicketDrawer is full-width on phones. All 4-up
+  metric grids → 1/2/4, 3-up project grids → 1/2/3, two-pane
+  layouts and modal grids collapse to single column.
+- **Phase H** — Docs + final validation pass. This entry,
+  `docs/REFACTOR_LOG.md`, and a clean run of typecheck / lint /
+  test / build.
+
+Test arc: 215 → 255 passing. Lint warnings: 2 → 0.
+
 ### Added — CR #12: Dark mode
 - New `useTheme` hook + `ThemeToggle` component. Three states: `light`,
   `dark`, `system`; first visit follows `prefers-color-scheme`; manual

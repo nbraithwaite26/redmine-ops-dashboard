@@ -140,16 +140,55 @@ because Windows is case-insensitive and would collide with
 - Tests: `useDialogA11y.test.tsx` (5), QuickEditPopup +2 cases, Reports
   +3 cases.
 
-## Phase G — Responsive sweep ⏳
+## Phase G — Responsive sweep ✅
 
-Not started. Planned: sidebar overlay vs. push on narrow viewports,
-drawer becomes full-width on mobile, card grid breakpoints, table
-horizontal-scroll already works (just confirm).
+**Commit:** `Phase G: Responsive sweep`
 
-## Phase H — Docs + final validation ⏳
+- **Sidebar**: overlay-on-mobile, push-on-desktop. Below `md` (768px)
+  the rail goes `position: fixed` and slides off-screen when
+  collapsed; at `>=md` it returns to the sticky/push layout. A new
+  `useMediaQuery` hook drives the desktop-vs-mobile branch in
+  `AppShell`; a `<button>` backdrop (`data-testid="sidebar-backdrop"`)
+  darkens content on mobile and dismisses the rail when tapped.
+- **First-time mobile default**: `useSidebarCollapse` now reads a
+  `defaultCollapsedQuery` (default `(max-width: 767px)`) when no
+  stored value exists, so a fresh phone visit starts collapsed
+  instead of with the rail covering content.
+- **RightPanel**: `hidden xl:flex` — only renders at `>=1280px`. On
+  tablets and phones the main column gets that 320px back.
+- **TicketDrawer**: `w-full sm:w-[640px]` — full-width on phones,
+  fixed-width drawer at `sm`+.
+- **Card grids** gained breakpoints:
+  - 4-up metrics (Dashboard, Reports, TimeTracking) → 1/2/4.
+  - 3-up project grids (Projects, AllProjects, Home Tools) → 1/2/3.
+  - 2-up two-pane layouts (Hours, Directory, Settings status) → 1/2.
+  - Modal grids (QuickEditPopup, AddTimeModal, TicketDrawer
+    sections) collapse to single column on phones. `col-span-2`
+    full-row labels switched to `sm:col-span-2`.
+- **Table horizontal scroll**: `overflow-x-auto` was already in
+  place — confirmed via mobile preview that IssueTable scrolls
+  horizontally without breaking the page layout.
 
-Not started. Planned: CHANGELOG + CHANGE_REQUESTS updates summarizing
-the refactor, plus a final clean run of typecheck / lint / test / build.
+`src/tests/setup.ts` now installs a minimal jsdom `matchMedia` stub
+so existing tests that don't care about responsive state keep
+working; new tests override `window.matchMedia` themselves.
+
+Tests: `useMediaQuery.test.ts` (3), `useSidebarCollapse.test.ts`
+(+2 cases for the mobile default), `AppShell.test.tsx` (+2 cases
+for the backdrop).
+
+## Phase H — Docs + final validation ✅
+
+**Commit:** `Phase H: Docs + final validation`
+
+- This file (`REFACTOR_LOG.md`) updated end-to-end with Phase G and
+  H notes.
+- `CHANGELOG.md` gained a "Refactor session" section under
+  `[Unreleased]` summarizing Phases 0 through H, the test-count
+  arc (215 → 255), and the lint-warning fix (2 → 0).
+- Final clean run: `npm run typecheck` ✓ · `npm run lint` ✓ (0
+  warnings) · `npm test` ✓ 255 passing across 34 files · `npm run
+  build` ✓.
 
 ---
 
@@ -165,6 +204,8 @@ the refactor, plus a final clean run of typecheck / lint / test / build.
 | Phase D | 32 | 238 | 0 |
 | Phase E | 32 | 238 | 0 |
 | Phase F | 33 | 248 | 0 |
+| Phase G | 34 | 255 | 0 |
+| Phase H | 34 | 255 | 0 |
 
 ## New files this session
 
@@ -173,6 +214,7 @@ the refactor, plus a final clean run of typecheck / lint / test / build.
 - `src/hooks/useIssueEditor.ts`
 - `src/hooks/useTableState.ts`
 - `src/hooks/useDialogA11y.ts`
+- `src/hooks/useMediaQuery.ts`
 
 **Components:**
 - `src/components/IssueRow.tsx`
@@ -188,6 +230,8 @@ the refactor, plus a final clean run of typecheck / lint / test / build.
 - `src/tests/useAsyncResource.test.ts`
 - `src/tests/useIssueEditor.test.ts`
 - `src/tests/useTableState.test.ts`
+- `src/tests/useDialogA11y.test.tsx`
+- `src/tests/useMediaQuery.test.ts`
 
 ## Behavior intentionally unchanged
 
