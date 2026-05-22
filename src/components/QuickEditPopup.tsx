@@ -245,21 +245,6 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
         </div>
       </div>
 
-      <style>{`
-        .input {
-          width: 100%;
-          padding: 0.4rem 0.6rem;
-          border: 1px solid #E5E7EB;
-          border-radius: 0.375rem;
-          background: white;
-          font-size: 0.875rem;
-        }
-        .input:focus {
-          outline: none;
-          border-color: #FEDF00;
-          box-shadow: 0 0 0 3px rgba(254, 223, 0, 0.3);
-        }
-      `}</style>
     </div>
   );
 }

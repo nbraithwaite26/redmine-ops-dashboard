@@ -163,15 +163,6 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
             <Save size={14} /> Save
           </button>
         </div>
-        <style>{`
-          .modal-input {
-            width: 100%;
-            padding: 0.4rem 0.6rem;
-            border: 1px solid #E5E7EB;
-            border-radius: 0.375rem;
-            font-size: 0.875rem;
-          }
-        `}</style>
       </div>
     </div>
   );

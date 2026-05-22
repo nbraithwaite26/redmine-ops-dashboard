@@ -194,6 +194,33 @@ body {
     background-color: var(--brand-active-bg);
     color: var(--brand-active-text);
   }
+
+  /* Shared form input style used by drawers, popups, modals, and inline
+     edit fields. Previously duplicated inline `<style>` blocks in each
+     of QuickEditPopup, TicketDrawer, AddTimeModal, ProjectBuilder, and
+     Settings. */
+  .form-input,
+  .modal-input,
+  .builder-input,
+  .settings-input,
+  .input {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-default);
+    border-radius: 0.375rem;
+    background: var(--bg-card);
+    color: var(--text-ink);
+    font-size: 0.875rem;
+  }
+  .form-input:focus,
+  .modal-input:focus,
+  .builder-input:focus,
+  .settings-input:focus,
+  .input:focus {
+    outline: none;
+    border-color: #FEDF00;
+    box-shadow: 0 0 0 3px rgba(254, 223, 0, 0.30);
+  }
 }
 
 /* Dark-mode overrides for legacy Tailwind color classes used throughout the

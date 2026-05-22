@@ -205,20 +205,6 @@ export default function ProjectBuilder() {
         </div>
       </section>
 
-      <style>{`
-        .builder-input {
-          width: 100%;
-          padding: 0.35rem 0.55rem;
-          border: 1px solid #E5E7EB;
-          border-radius: 0.375rem;
-          font-size: 0.85rem;
-        }
-        .builder-input:focus {
-          outline: none;
-          border-color: #FEDF00;
-          box-shadow: 0 0 0 2px rgba(254, 223, 0, 0.3);
-        }
-      `}</style>
     </div>
   );
 }
