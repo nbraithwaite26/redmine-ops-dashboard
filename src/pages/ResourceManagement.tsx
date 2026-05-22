@@ -1,25 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import ReorderableSection from '../components/ReorderableSection';
 import ResourceTimeline from '../components/ResourceTimeline';
 import { currentMockUser } from '../data/mockData';
+import { useSectionOrder } from '../hooks/useSectionOrder';
 import { getIssues, getResourceAllocations, getUsers } from '../services/redmineApi';
 import type { Issue, ResourceAllocation, User } from '../types/redmine';
 
 interface Props {
-  /**
-   * Which slice of the timeline to show.
-   * - `personal`: filter to the current user.
-   * - `team`:     full team view (current default).
-   *
-   * The full reorderable multi-section page lands in CR #3+#4. This prop is
-   * the seam that change request will plug into.
-   */
+  /** When set, only show that single section. Used by the legacy
+   *  `/resources/personal` and `/resources/team` routes. */
   view?: 'personal' | 'team';
 }
 
-export default function ResourceManagement({ view = 'team' }: Props) {
+interface SectionDef {
+  id: string;
+  title: string;
+  subtitle?: string;
+  filter: (kind: { users: User[]; issues: Issue[]; allocations: ResourceAllocation[] }) => {
+    users: User[];
+    issues: Issue[];
+    allocations: ResourceAllocation[];
+  };
+}
+
+const SECTIONS: SectionDef[] = [
+  {
+    id: 'personal',
+    title: 'Personal — my Gantt',
+    subtitle: 'Your allocations across active projects.',
+    filter: ({ users, issues, allocations }) => ({
+      users: users.filter((u) => u.id === currentMockUser.id),
+      issues: issues.filter((i) => i.assignee?.id === currentMockUser.id),
+      allocations: allocations.filter((a) => a.userId === currentMockUser.id),
+    }),
+  },
+  {
+    id: 'team',
+    title: 'Team — full workload',
+    subtitle: 'Gantt across the whole team. Red bars indicate overload.',
+    filter: (all) => all,
+  },
+];
+
+const DEFAULT_ORDER = SECTIONS.map((s) => s.id);
+
+export default function ResourceManagement({ view }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [allocations, setAllocations] = useState<ResourceAllocation[]>([]);
+
+  const { order, moveUp, moveDown } = useSectionOrder({
+    storageKey: 'rod.resources.order',
+    defaultOrder: DEFAULT_ORDER,
+  });
 
   useEffect(() => {
     (async () => {
@@ -34,36 +67,47 @@ export default function ResourceManagement({ view = 'team' }: Props) {
     })();
   }, []);
 
-  const isPersonal = view === 'personal';
-
-  const filteredUsers = isPersonal
-    ? users.filter((u) => u.id === currentMockUser.id)
-    : users;
-  const filteredIssues = isPersonal
-    ? issues.filter((i) => i.assignee?.id === currentMockUser.id)
-    : issues;
-  const filteredAllocations = isPersonal
-    ? allocations.filter((a) => a.userId === currentMockUser.id)
-    : allocations;
+  const visibleSections = useMemo(() => {
+    if (view) return SECTIONS.filter((s) => s.id === view);
+    return order
+      .map((id) => SECTIONS.find((s) => s.id === id))
+      .filter((s): s is SectionDef => Boolean(s));
+  }, [order, view]);
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">
-          {isPersonal ? 'Resource Planning · Personal' : 'Resource Planning · Team'}
-        </h1>
+        <h1 className="text-2xl font-semibold">Resource Management</h1>
         <p className="text-sm text-ink-muted">
-          {isPersonal
-            ? 'Your allocations across active projects. Red bars indicate overload.'
-            : 'Gantt-style allocation view across the team. Red bars indicate overload, purple bars are manual allocations.'}
+          {view
+            ? 'Single-view route for backward compatibility — for the full reorderable view, use the Resources sidebar entry.'
+            : 'Reorderable sections — use the up/down arrows to put the view you check most often on top. Layout is saved per device.'}
         </p>
       </div>
 
-      <ResourceTimeline
-        users={filteredUsers}
-        issues={filteredIssues}
-        allocations={filteredAllocations}
-      />
+      <div className="space-y-4">
+        {visibleSections.map((section, idx) => {
+          const filtered = section.filter({ users, issues, allocations });
+          return (
+            <ReorderableSection
+              key={section.id}
+              id={section.id}
+              title={section.title}
+              subtitle={section.subtitle}
+              canMoveUp={!view && idx > 0}
+              canMoveDown={!view && idx < visibleSections.length - 1}
+              onMoveUp={() => moveUp(section.id)}
+              onMoveDown={() => moveDown(section.id)}
+            >
+              <ResourceTimeline
+                users={filtered.users}
+                issues={filtered.issues}
+                allocations={filtered.allocations}
+              />
+            </ReorderableSection>
+          );
+        })}
+      </div>
     </div>
   );
 }

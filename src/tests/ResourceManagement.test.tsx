@@ -1,35 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, Navigate } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import ResourceManagement from '../pages/ResourceManagement';
 import { currentMockUser } from '../data/mockData';
 
-describe('<ResourceManagement /> (route split)', () => {
-  it('shows the team headline when view="team"', async () => {
-    render(
-      <MemoryRouter>
-        <ResourceManagement view="team" />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getByText(/Resource Planning · Team/i)).toBeInTheDocument(),
-    );
-  });
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
-  it('shows the personal headline when view="personal"', async () => {
-    render(
-      <MemoryRouter>
-        <ResourceManagement view="personal" />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getByText(/Resource Planning · Personal/i)).toBeInTheDocument(),
-    );
-  });
+afterEach(() => {
+  window.localStorage.clear();
+});
 
-  // Integration: confirm that the personal view filters allocations to the
-  // current mock user only.
-  it('personal view renders only the current mock user in the hierarchy', async () => {
+describe('<ResourceManagement /> (single-view legacy routes)', () => {
+  it('shows only the personal section when view="personal"', async () => {
     render(
       <MemoryRouter>
         <ResourceManagement view="personal" />
@@ -38,42 +22,66 @@ describe('<ResourceManagement /> (route split)', () => {
     await waitFor(() =>
       expect(screen.getAllByText(currentMockUser.name).length).toBeGreaterThan(0),
     );
-    // Other users in the seed should NOT appear in the personal view.
-    expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
-    expect(screen.queryByText('Taylor Rivera')).not.toBeInTheDocument();
+    expect(screen.getByTestId('section-personal')).toBeInTheDocument();
+    expect(screen.queryByTestId('section-team')).not.toBeInTheDocument();
   });
 
-  it('team view renders multiple users', async () => {
+  it('shows only the team section when view="team"', async () => {
     render(
       <MemoryRouter>
         <ResourceManagement view="team" />
       </MemoryRouter>,
     );
-    await waitFor(() => {
-      expect(screen.getByText(currentMockUser.name)).toBeInTheDocument();
-    });
-    expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
-    expect(screen.getByText('Taylor Rivera')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Jordan Lee')).toBeInTheDocument());
+    expect(screen.getByTestId('section-team')).toBeInTheDocument();
+    expect(screen.queryByTestId('section-personal')).not.toBeInTheDocument();
   });
+});
 
-  // Integration: /resources should redirect to /resources/personal.
-  it('redirects /resources to /resources/personal', async () => {
+describe('<ResourceManagement /> (default reorderable view)', () => {
+  it('renders both sections in default order with reorder arrows enabled', async () => {
     render(
-      <MemoryRouter initialEntries={['/resources']}>
-        <Routes>
-          <Route
-            path="/resources"
-            element={<Navigate to="/resources/personal" replace />}
-          />
-          <Route
-            path="/resources/personal"
-            element={<ResourceManagement view="personal" />}
-          />
-        </Routes>
+      <MemoryRouter>
+        <ResourceManagement />
       </MemoryRouter>,
     );
-    await waitFor(() =>
-      expect(screen.getByText(/Resource Planning · Personal/i)).toBeInTheDocument(),
+    await waitFor(() => screen.getByTestId('section-personal'));
+    const personalIdx = screen
+      .getAllByText(/personal — my gantt|team — full workload/i)
+      .findIndex((el) => el.textContent?.toLowerCase().includes('personal'));
+    expect(personalIdx).toBe(0); // personal first by default
+  });
+
+  it('move-down on Personal swaps it below Team and persists', async () => {
+    render(
+      <MemoryRouter>
+        <ResourceManagement />
+      </MemoryRouter>,
     );
+    await waitFor(() => screen.getByTestId('section-personal'));
+    fireEvent.click(
+      screen.getByRole('button', { name: /move personal — my gantt down/i }),
+    );
+    const orderAfter = screen
+      .getAllByText(/personal — my gantt|team — full workload/i)
+      .map((el) => el.textContent ?? '');
+    // The first occurrence should now be the Team title.
+    expect(orderAfter[0]?.toLowerCase()).toContain('team');
+    // Persisted to localStorage.
+    expect(window.localStorage.getItem('rod.resources.order')).toBe(
+      JSON.stringify(['team', 'personal']),
+    );
+  });
+
+  it('move-up at top of order is disabled', async () => {
+    render(
+      <MemoryRouter>
+        <ResourceManagement />
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('section-personal'));
+    expect(
+      screen.getByRole('button', { name: /move personal — my gantt up/i }),
+    ).toBeDisabled();
   });
 });

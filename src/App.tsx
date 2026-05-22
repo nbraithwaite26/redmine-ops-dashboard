@@ -45,7 +45,10 @@ export default function App() {
         <Route path="/projects/all" element={<AllProjects />} />
 
         <Route path="/project-builder" element={<ProjectBuilder />} />
-        <Route path="/resources" element={<Navigate to="/resources/personal" replace />} />
+        {/* /resources is the new full reorderable view; /resources/personal
+            and /resources/team remain as legacy single-section routes for
+            anyone deep-linking to one view. */}
+        <Route path="/resources" element={<ResourceManagement />} />
         <Route path="/resources/personal" element={<ResourceManagement view="personal" />} />
         <Route path="/resources/team" element={<ResourceManagement view="team" />} />
         <Route path="/time" element={<TimeTracking />} />
