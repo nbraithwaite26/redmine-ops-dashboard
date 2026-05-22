@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './components/AppShell';
 import Dashboard from './pages/Dashboard';
 import MyTasks from './pages/MyTasks';
+import Tasks from './pages/Tasks';
 import PastDue from './pages/PastDue';
 import TimeTracking from './pages/TimeTracking';
 import ResourceManagement from './pages/ResourceManagement';
@@ -10,7 +11,12 @@ import Directory from './pages/Directory';
 import Settings from './pages/Settings';
 import Home from './pages/Home';
 import Projects from './pages/Projects';
+import AllProjects from './pages/AllProjects';
 import Reports from './pages/Reports';
+import Calendar from './pages/Calendar';
+import Hours from './pages/Hours';
+import MyHours from './pages/MyHours';
+import TeamHours from './pages/TeamHours';
 
 export default function App() {
   return (
@@ -19,9 +25,25 @@ export default function App() {
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* Tasks — `/tasks` is the new combined My + Team view.
+            `/my-tasks` is kept as a legacy redirect for any bookmarks. */}
+        <Route path="/tasks" element={<Tasks />} />
         <Route path="/my-tasks" element={<MyTasks />} />
+
+        <Route path="/calendar" element={<Calendar />} />
+
+        {/* Hours — landing + two leaves. */}
+        <Route path="/hours" element={<Hours />} />
+        <Route path="/hours/me" element={<MyHours />} />
+        <Route path="/hours/team" element={<TeamHours />} />
+
         <Route path="/past-due" element={<PastDue />} />
+
+        {/* Projects — `/projects` = assigned to me, `/projects/all` = browse all */}
         <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/all" element={<AllProjects />} />
+
         <Route path="/project-builder" element={<ProjectBuilder />} />
         <Route path="/resources" element={<Navigate to="/resources/personal" replace />} />
         <Route path="/resources/personal" element={<ResourceManagement view="personal" />} />
