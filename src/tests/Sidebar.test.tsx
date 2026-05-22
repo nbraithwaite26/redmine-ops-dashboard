@@ -3,23 +3,31 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
+const EXPECTED_LABELS = [
+  'Home',
+  'Dashboard',
+  'Tasks',
+  'Calendar',
+  'Hours',
+  'Directory',
+  'All Projects',
+  'Projects',
+  'Settings',
+];
+
 describe('<Sidebar /> (collapsed vs expanded)', () => {
-  it('renders labels next to icons when expanded', () => {
+  it('renders 9 primary-rail items', () => {
     render(
       <MemoryRouter>
         <Sidebar collapsed={false} onToggle={() => {}} />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
-      'data-collapsed',
-      'false',
-    );
-    expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Resource Management')).toBeInTheDocument();
+    EXPECTED_LABELS.forEach((label) => {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
   });
 
-  it('hides labels when collapsed', () => {
+  it('hides text labels when collapsed but keeps title attributes', () => {
     render(
       <MemoryRouter>
         <Sidebar collapsed={true} onToggle={() => {}} />
@@ -29,8 +37,10 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
       'data-collapsed',
       'true',
     );
-    expect(screen.queryByText('Home')).not.toBeInTheDocument();
-    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    EXPECTED_LABELS.forEach((label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+      expect(screen.getByTitle(label)).toBeInTheDocument();
+    });
   });
 
   it('the in-sidebar chevron calls onToggle when expanded', () => {
@@ -45,13 +55,25 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the title attribute on collapsed icons for keyboard hover hints', () => {
+  it('Projects does not highlight when on /projects/all', () => {
     render(
-      <MemoryRouter>
-        <Sidebar collapsed={true} onToggle={() => {}} />
+      <MemoryRouter initialEntries={['/projects/all']}>
+        <Sidebar collapsed={false} onToggle={() => {}} />
       </MemoryRouter>,
     );
-    expect(screen.getByTitle('Home')).toBeInTheDocument();
-    expect(screen.getByTitle('Dashboard')).toBeInTheDocument();
+    const projectsLink = screen.getByRole('link', { name: 'Projects' });
+    const allProjectsLink = screen.getByRole('link', { name: 'All Projects' });
+    expect(projectsLink.className).not.toContain('bg-ink');
+    expect(allProjectsLink.className).toContain('bg-ink');
+  });
+
+  it('Projects highlights when on /projects exactly', () => {
+    render(
+      <MemoryRouter initialEntries={['/projects']}>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    const projectsLink = screen.getByRole('link', { name: 'Projects' });
+    expect(projectsLink.className).toContain('bg-ink');
   });
 });

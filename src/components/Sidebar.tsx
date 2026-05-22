@@ -1,33 +1,35 @@
 import {
-  AlarmClock,
-  BarChart3,
-  CalendarRange,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   FolderKanban,
-  Hammer,
+  FolderTree,
   Home,
   LayoutDashboard,
   Library,
   ListTodo,
   Settings,
-  Users,
+  Timer,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 
+/**
+ * Primary navigation rail. Items here are the top-level destinations a
+ * user reaches without going through the workspaces panel. Demoted items
+ * (Past Due, Project Builder, Resource Management, Time Tracking, Reports)
+ * live in SecondaryNav.
+ */
 const links = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/my-tasks', label: 'My Tasks', icon: ListTodo },
-  { to: '/past-due', label: 'Past Due', icon: AlarmClock },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/project-builder', label: 'Project Builder', icon: Hammer },
-  { to: '/resources/team', label: 'Resource Management', icon: Users },
-  { to: '/time', label: 'Time Tracking', icon: CalendarRange },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/tasks', label: 'Tasks', icon: ListTodo },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { to: '/hours', label: 'Hours', icon: Timer },
   { to: '/directory', label: 'Directory', icon: Library },
+  { to: '/projects/all', label: 'All Projects', icon: FolderTree },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -74,6 +76,7 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
           key={to}
           to={to}
           title={collapsed ? label : undefined}
+          end={to === '/projects'}
           className={({ isActive }) =>
             clsx(
               'flex items-center gap-2 rounded-lg transition text-sm font-medium',
