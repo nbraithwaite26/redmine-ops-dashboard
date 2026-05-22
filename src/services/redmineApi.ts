@@ -12,6 +12,7 @@
  *    happens — keep call sites unchanged.
  */
 
+import { MOCK_TODAY } from '../lib/format';
 import {
   currentMockUser,
   mockAllocations,
@@ -129,7 +130,7 @@ export async function getMyIssues(userId: number = currentMockUser.id): Promise<
   return wait(issues.filter((i) => i.assignee?.id === userId));
 }
 
-export async function getPastDueIssues(today: Date = new Date('2026-05-21')): Promise<Issue[]> {
+export async function getPastDueIssues(today: Date = MOCK_TODAY): Promise<Issue[]> {
   const cutoff = today.toISOString().slice(0, 10);
   return wait(
     issues.filter(

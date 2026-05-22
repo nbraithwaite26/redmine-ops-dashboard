@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import PriorityPill, { priorityPillClass } from '../components/PriorityPill';
+import PriorityPill from '../components/PriorityPill';
+import { priorityPill } from '../lib/format';
 import type { IssuePriority } from '../types/redmine';
 
-describe('priorityPillClass', () => {
+describe('priorityPill (class helper)', () => {
   it.each<[IssuePriority, string]>([
     ['Low', 'pill-gray'],
     ['Normal', 'pill-blue'],
@@ -11,7 +12,7 @@ describe('priorityPillClass', () => {
     ['Urgent', 'pill-red'],
     ['Immediate', 'pill-red'],
   ])('%s -> %s', (priority, expected) => {
-    expect(priorityPillClass(priority)).toBe(expected);
+    expect(priorityPill(priority)).toBe(expected);
   });
 });
 

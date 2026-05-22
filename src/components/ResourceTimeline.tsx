@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Printer, Save, Settings as SettingsIcon } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue, ResourceAllocation, User } from '../types/redmine';
-import { formatHours } from '../lib/format';
+import { MOCK_TODAY, formatHours } from '../lib/format';
 
 interface Props {
   users: User[];
@@ -26,8 +26,11 @@ export default function ResourceTimeline({
   const [zoom, setZoom] = useState<Zoom>('Week');
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 1: true });
 
-  const today = new Date('2026-05-21');
-  const start = new Date(startDate);
+  const today = MOCK_TODAY;
+  // Memoize `start` so its identity is stable across renders; without this
+  // the `dates` memo would invalidate on every render because `new Date()`
+  // produces a fresh object each pass.
+  const start = useMemo(() => new Date(startDate), [startDate]);
   const dates = useMemo(() => {
     return Array.from({ length: days }, (_, idx) => {
       const d = new Date(start);

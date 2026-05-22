@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import type { IssuePriority } from '../types/redmine';
+import { priorityPill } from '../lib/format';
 
 interface Props {
   priority: IssuePriority;
@@ -20,25 +21,10 @@ export default function PriorityPill({ priority, iconSize = 10 }: Props) {
     <span
       data-testid="priority-pill"
       data-priority={priority}
-      className={clsx('inline-flex items-center gap-1', priorityPillClass(priority))}
+      className={clsx('inline-flex items-center gap-1', priorityPill(priority))}
     >
       {showIcon && <AlertTriangle size={iconSize} aria-hidden="true" />}
       <span>{priority}</span>
     </span>
   );
-}
-
-export function priorityPillClass(priority: IssuePriority): string {
-  switch (priority) {
-    case 'Immediate':
-    case 'Urgent':
-      return 'pill-red';
-    case 'High':
-      return 'pill-orange';
-    case 'Normal':
-      return 'pill-blue';
-    case 'Low':
-    default:
-      return 'pill-gray';
-  }
 }
