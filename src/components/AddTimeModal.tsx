@@ -7,6 +7,7 @@ import {
   mockUsers,
 } from '../data/mockData';
 import { createTimeEntry } from '../services/redmineApi';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface Props {
   onClose: () => void;
@@ -44,6 +45,8 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
     onCreated();
   };
 
+  const dialogRef = useDialogA11y({ open: true, onClose });
+
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
@@ -53,6 +56,7 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
       aria-labelledby="add-time-title"
     >
       <div
+        ref={dialogRef}
         className="bg-white w-[520px] max-w-[95vw] rounded-xl shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >

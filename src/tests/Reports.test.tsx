@@ -48,4 +48,50 @@ describe('<Reports /> (tabbed)', () => {
       expect(screen.getByTestId('panel-kpi')).toBeInTheDocument(),
     );
   });
+
+  it('Arrow-right moves selection to the next tab (a11y wai-aria pattern)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/reports']}>
+        <Reports />
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('panel-kpi'));
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    await waitFor(() =>
+      expect(screen.getByTestId('panel-issues')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('tab-issues')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('Arrow-left wraps to the last tab from the first', async () => {
+    render(
+      <MemoryRouter initialEntries={['/reports']}>
+        <Reports />
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('panel-kpi'));
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+    await waitFor(() =>
+      expect(screen.getByTestId('panel-issues')).toBeInTheDocument(),
+    );
+  });
+
+  it('tabs follow the roving-tabindex pattern (active tab gets tabIndex=0)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/reports']}>
+        <Reports />
+      </MemoryRouter>,
+    );
+    await waitFor(() => screen.getByTestId('panel-kpi'));
+    expect(screen.getByTestId('tab-kpi')).toHaveAttribute('tabindex', '0');
+    expect(screen.getByTestId('tab-issues')).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    await waitFor(() =>
+      expect(screen.getByTestId('tab-issues')).toHaveAttribute('tabindex', '0'),
+    );
+    expect(screen.getByTestId('tab-kpi')).toHaveAttribute('tabindex', '-1');
+  });
 });

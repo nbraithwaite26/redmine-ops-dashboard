@@ -44,4 +44,32 @@ describe('<QuickEditPopup />', () => {
     fireEvent.click(screen.getByRole('button', { name: /open full ticket editor/i }));
     expect(onOpenFullEditor).toHaveBeenCalledTimes(1);
   });
+
+  it('uses role="dialog" with aria-labelledby pointing at the title', () => {
+    render(
+      <QuickEditPopup
+        issue={mockIssues[0]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const titleId = dialog.getAttribute('aria-labelledby');
+    expect(titleId).toBe('quick-edit-title');
+    expect(document.getElementById(titleId!)).toBeTruthy();
+  });
+
+  it('ESC closes the popup', () => {
+    const onClose = vi.fn();
+    render(
+      <QuickEditPopup
+        issue={mockIssues[0]}
+        onClose={onClose}
+        onSaved={() => {}}
+      />,
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -86,12 +86,26 @@ export default function Reports() {
         role="tablist"
         aria-label="Report views"
         className="flex items-center gap-2 border-b border-gray-200"
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const idx = TABS.findIndex((t) => t.id === activeTab);
+          const dir = e.key === 'ArrowLeft' ? -1 : 1;
+          const next = TABS[(idx + dir + TABS.length) % TABS.length];
+          setTab(next.id);
+          // Move focus to the newly-active tab so the focus ring tracks it.
+          const target = (e.currentTarget.querySelector(
+            `[data-testid="tab-${next.id}"]`,
+          ) as HTMLElement | null);
+          target?.focus();
+        }}
       >
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             role="tab"
             aria-selected={activeTab === id}
+            tabIndex={activeTab === id ? 0 : -1}
             data-testid={`tab-${id}`}
             onClick={() => setTab(id)}
             className={clsx(

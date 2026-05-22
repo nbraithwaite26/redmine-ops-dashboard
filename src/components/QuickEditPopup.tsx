@@ -8,6 +8,7 @@ import {
   mockUsers,
 } from '../data/mockData';
 import { createTimeEntry, updateIssue } from '../services/redmineApi';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface Props {
   issue: Issue;
@@ -56,22 +57,25 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
     }
   };
 
+  const dialogRef = useDialogA11y({ open: true, onClose });
+
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Quick edit"
+      aria-labelledby="quick-edit-title"
     >
       <div
+        ref={dialogRef}
         className="bg-white w-[600px] max-w-[95vw] rounded-xl shadow-xl border border-gray-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div>
             <div className="text-xs text-ink-muted">Quick edit</div>
-            <div className="font-semibold">
+            <div id="quick-edit-title" className="font-semibold">
               <a className="link" href={`#/my-tasks?id=${issue.id}`}>#{issue.id}</a> · {issue.subject}
             </div>
           </div>

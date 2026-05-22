@@ -16,3 +16,5 @@ coverage
 vite.config.d.ts
 vite.config.js
 .claude/launch.json
+.env.local
+.env

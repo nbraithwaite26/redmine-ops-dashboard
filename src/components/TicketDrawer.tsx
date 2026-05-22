@@ -9,6 +9,7 @@ import {
   Timer,
   X,
 } from 'lucide-react';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import type { Issue, IssuePriority, IssueStatus, Tracker } from '../types/redmine';
 import {
   mockIssueStatuses,
@@ -42,15 +43,18 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
     }
   };
 
+  const dialogRef = useDialogA11y({ open: true, onClose });
+
   return (
     <div
       className="fixed inset-0 z-30 flex justify-end bg-black/30"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Ticket editor"
+      aria-labelledby="ticket-drawer-title"
     >
       <div
+        ref={dialogRef}
         className="w-[640px] max-w-full h-full bg-white shadow-drawer flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -59,7 +63,9 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
             <div className="text-xs text-ink-muted">
               {draft.tracker} · {draft.projectName}
             </div>
-            <div className="font-semibold text-lg">#{draft.id} · {draft.subject}</div>
+            <div id="ticket-drawer-title" className="font-semibold text-lg">
+              #{draft.id} · {draft.subject}
+            </div>
           </div>
           <button onClick={onClose} aria-label="Close drawer">
             <X size={18} />
