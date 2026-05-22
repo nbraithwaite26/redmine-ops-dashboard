@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
+import { buildDashboardMetrics, currentMockUser, mockIssues } from '../data/mockData';
 
-describe('<Dashboard />', () => {
-  it('renders the overview tabs and metric cards', async () => {
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname}</div>;
+}
+
+describe('<Dashboard /> (functional + integration)', () => {
+  it('renders the overview heading and the work tabs', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -26,5 +32,67 @@ describe('<Dashboard />', () => {
     );
     fireEvent.click(screen.getByText('Project Health'));
     expect(screen.getByText('Project Health')).toBeInTheDocument();
+  });
+
+  // Integration: the page should render exactly the 8 cards produced by
+  // buildDashboardMetrics — proves the data-driven refactor is wired up.
+  it('renders one card per metric returned by buildDashboardMetrics', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Tasks assigned to you/i)).toBeInTheDocument(),
+    );
+
+    // Use a sample input that resembles what the page will load to know the
+    // expected titles. We don't need the exact same data — only that the
+    // titles produced by the builder all appear in the DOM.
+    const expected = buildDashboardMetrics({
+      myIssues: mockIssues.filter((i) => i.assignee?.id === currentMockUser.id),
+      allIssues: mockIssues,
+      pastDueCount: 0,
+      weeklyHours: { logged: 0, target: 40 },
+      teamHours: { logged: 0, target: 360 },
+    });
+    expect(expected).toHaveLength(8);
+    for (const m of expected) {
+      expect(screen.getByText(m.title)).toBeInTheDocument();
+    }
+  });
+
+  // Integration: clicking a card with a route should navigate to that route.
+  it('navigates to the Past Due page when the Past due tasks card is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/past-due" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const card = await waitFor(() =>
+      screen.getByRole('button', { name: /past due tasks/i }),
+    );
+    fireEvent.click(card);
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/past-due'),
+    );
+  });
+
+  // Integration: My Tasks table renders below the cards and includes a row
+  // for one of the seeded issues.
+  it('renders the My Tasks table with at least one seeded issue', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Issues assigned to me/i)).toBeInTheDocument(),
+    );
+    // The seed data has #1024 assigned to the current mock user.
+    expect(await screen.findByText(/#1024/)).toBeInTheDocument();
   });
 });
