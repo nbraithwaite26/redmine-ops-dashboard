@@ -53,6 +53,23 @@ describe('<IssueTable />', () => {
     expect(actualValues).toEqual(expectedValues);
   });
 
+  // Integration: every row renders a priority pill, and rows whose priority
+  // is High/Urgent/Immediate include an icon inside the pill.
+  it('priority pills include an icon for High, Urgent, and Immediate rows', () => {
+    render(<IssueTable title="Test" issues={mockIssues} />);
+    const pills = screen.getAllByTestId('priority-pill');
+    expect(pills.length).toBe(mockIssues.length);
+    pills.forEach((pill) => {
+      const priority = pill.getAttribute('data-priority');
+      const hasIcon = pill.querySelector('svg') !== null;
+      if (priority === 'High' || priority === 'Urgent' || priority === 'Immediate') {
+        expect(hasIcon).toBe(true);
+      } else {
+        expect(hasIcon).toBe(false);
+      }
+    });
+  });
+
   // Integration: the column header is sortable; verify sorting by % Done
   // reorders the rendered progress bars by their aria-valuenow.
   it('sorting by % Done reorders the rendered progress bars', () => {

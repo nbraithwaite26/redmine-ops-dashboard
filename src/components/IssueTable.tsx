@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
-import { MOCK_TODAY, daysOverdue, formatDate, formatHours, isOverdue, priorityPill, statusPill } from '../lib/format';
+import { MOCK_TODAY, daysOverdue, formatDate, formatHours, isOverdue, statusPill } from '../lib/format';
+import PriorityPill from './PriorityPill';
 import ProgressBar from './ProgressBar';
 
 interface Props {
@@ -216,7 +217,7 @@ export default function IssueTable({
                   </td>
                   <td className="px-2 py-2 text-ink-soft">{i.projectName}</td>
                   <td className="px-2 py-2"><span className={statusPill(i.status)}>{i.status}</span></td>
-                  <td className="px-2 py-2"><span className={priorityPill(i.priority)}>{i.priority}</span></td>
+                  <td className="px-2 py-2"><PriorityPill priority={i.priority} /></td>
                   <td className="px-2 py-2 text-ink-soft">{i.assignee?.name ?? '—'}</td>
                   <td className="px-2 py-2 text-ink-soft">{formatDate(i.startDate)}</td>
                   <td className={clsx('px-2 py-2', overdue ? 'text-red-600 font-medium' : 'text-ink-soft')}>
