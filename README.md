@@ -11,7 +11,8 @@ This repository contains the **base UI** with mock data and API placeholder func
 - [docs/FEATURES.md](./docs/FEATURES.md) — feature checklist for every page and component
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — code layout, data flow, integration plan
 - [docs/API.md](./docs/API.md) — mock API reference + suggested Redmine REST mapping
-- [docs/CHANGE_REQUESTS.md](./docs/CHANGE_REQUESTS.md) — running log of requested UI changes (collected, not yet implemented)
+- [docs/CHANGE_REQUESTS.md](./docs/CHANGE_REQUESTS.md) — running log of requested UI changes
+- [docs/SCAFFOLD_PLAN.md](./docs/SCAFFOLD_PLAN.md) — approved implementation plan for CRs #1–#11
 
 ## Features
 
