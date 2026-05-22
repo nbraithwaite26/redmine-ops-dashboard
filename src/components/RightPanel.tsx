@@ -49,8 +49,9 @@ const recentActivity = [
 export default function RightPanel() {
   return (
     <aside
+      data-testid="right-panel"
       style={{ maxHeight: 'calc(100vh - 3.5rem)' }}
-      className="w-80 shrink-0 sticky top-14 self-start overflow-y-auto border-l border-gray-200 bg-white flex flex-col"
+      className="w-80 shrink-0 sticky top-14 self-start overflow-y-auto border-l border-gray-200 bg-white hidden xl:flex flex-col"
       aria-label="Utility panel"
     >
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">

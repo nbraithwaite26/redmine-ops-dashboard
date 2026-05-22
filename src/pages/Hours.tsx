@@ -25,7 +25,7 @@ export default function Hours() {
           Weekly logged time — drill into your own entries or the team breakdown.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate('/hours/me')}
           className="card p-6 text-left hover:shadow-md transition flex items-center gap-6"

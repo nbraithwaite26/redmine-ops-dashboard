@@ -54,10 +54,18 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
         maxHeight: 'calc(100vh - 3.5rem)',
       }}
       className={clsx(
-        // Sticky-top below the TopBar (h-14 = 3.5rem) so the rail stays
-        // visible while the page scrolls.
-        'shrink-0 sticky top-14 self-start flex flex-col py-3 gap-1 border-r transition-[width] duration-150 overflow-y-auto',
-        collapsed ? 'w-14 items-center' : 'w-52 items-stretch px-2',
+        // Below `md` the rail floats over content (fixed/overlay) so it
+        // doesn't steal horizontal space on phones. At `md` and up it
+        // returns to the sticky-push layout used on desktop.
+        'shrink-0 flex flex-col py-3 gap-1 border-r overflow-y-auto z-40',
+        'fixed top-14 left-0 md:sticky md:top-14 md:self-start',
+        'transition-transform md:transition-[width,transform] duration-150',
+        // Width + visibility states differ by viewport. On mobile the
+        // collapsed flag hides the rail entirely (translate it off-screen);
+        // on desktop it shrinks to an icon-only rail.
+        collapsed
+          ? '-translate-x-full w-52 md:translate-x-0 md:w-14 md:items-center'
+          : 'translate-x-0 w-52 md:items-stretch md:px-2',
       )}
       role="navigation"
       aria-label="Primary navigation"

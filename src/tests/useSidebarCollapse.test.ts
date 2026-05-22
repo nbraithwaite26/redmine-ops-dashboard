@@ -34,6 +34,52 @@ describe('useSidebarCollapse — initial state', () => {
     );
     expect(result.current.collapsed).toBe(true);
   });
+
+  it('defaults to collapsed when the viewport matches the mobile media query and no stored value exists', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { result } = renderHook(() =>
+        useSidebarCollapse({ storage: makeStorage(), shortcutKey: null }),
+      );
+      expect(result.current.collapsed).toBe(true);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('stored "0" wins over the mobile default', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const storage = makeStorage();
+      storage.setItem('rod.sidebar.collapsed', '0');
+      const { result } = renderHook(() =>
+        useSidebarCollapse({ storage, shortcutKey: null }),
+      );
+      expect(result.current.collapsed).toBe(false);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
 });
 
 describe('useSidebarCollapse — transitions', () => {

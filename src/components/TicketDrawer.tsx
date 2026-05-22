@@ -55,7 +55,7 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
     >
       <div
         ref={dialogRef}
-        className="w-[640px] max-w-full h-full bg-white shadow-drawer flex flex-col"
+        className="w-full sm:w-[640px] sm:max-w-full h-full bg-white shadow-drawer flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b">
@@ -74,7 +74,7 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5 text-sm">
           <Section title="Overview">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <F label="Subject" full>
                 <input
                   className="input"
@@ -163,7 +163,7 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
           </Section>
 
           <Section title="Schedule">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <F label="Start date">
                 <input
                   type="date"
@@ -218,7 +218,7 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
           </Section>
 
           <Section title="Relations">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <F label="Parent task">
                 <input
                   className="input"
@@ -323,7 +323,7 @@ function F({
   full?: boolean;
 }) {
   return (
-    <label className={full ? 'col-span-2 block' : 'block'}>
+    <label className={full ? 'sm:col-span-2 block' : 'block'}>
       <div className="text-xs text-ink-muted mb-1">{label}</div>
       {children}
     </label>

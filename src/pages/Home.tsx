@@ -151,7 +151,7 @@ export default function Home() {
           <h2 className="text-lg font-semibold">Tools</h2>
           <a className="link text-sm" href="#/dashboard">View all</a>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {tools.map((c) => (
             <button
               key={c.title}

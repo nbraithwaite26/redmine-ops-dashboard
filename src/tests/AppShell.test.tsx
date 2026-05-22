@@ -162,6 +162,70 @@ describe('<AppShell /> banner integration', () => {
     );
   });
 
+  it('renders the mobile backdrop only when the viewport is narrow and the sidebar is open', async () => {
+    const original = window.matchMedia;
+    // Force `(min-width: 768px)` to NOT match — i.e. narrow viewport.
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(min-width: 768px)' ? false : query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      // Force the sidebar to be open so the backdrop renders.
+      window.localStorage.setItem('rod.sidebar.collapsed', '0');
+      render(
+        <MemoryRouter>
+          <AppShell>
+            <div>page</div>
+          </AppShell>
+        </MemoryRouter>,
+      );
+      await waitFor(() => screen.getByTestId('primary-sidebar'));
+      const backdrop = screen.getByTestId('sidebar-backdrop');
+      expect(backdrop).toBeInTheDocument();
+      fireEvent.click(backdrop);
+      expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
+        'data-collapsed',
+        'true',
+      );
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('does not render the mobile backdrop on desktop viewports', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(min-width: 768px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      window.localStorage.setItem('rod.sidebar.collapsed', '0');
+      render(
+        <MemoryRouter>
+          <AppShell>
+            <div>page</div>
+          </AppShell>
+        </MemoryRouter>,
+      );
+      await waitFor(() => screen.getByTestId('primary-sidebar'));
+      expect(screen.queryByTestId('sidebar-backdrop')).toBeNull();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('dismissing the mock warning hides the banner for the session', async () => {
     render(
       <MemoryRouter>

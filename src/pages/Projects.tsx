@@ -31,7 +31,7 @@ export default function Projects() {
           <Plus size={14} /> New project
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {projects.map((p) => {
           const s = stats(p.id);
           return (

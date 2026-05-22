@@ -75,8 +75,8 @@ export default function ProjectBuilder() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <section className="card p-4 space-y-2 col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section className="card p-4 space-y-2 lg:col-span-2">
           <h2 className="font-semibold">Project details</h2>
           <label className="block text-sm">
             <span className="text-xs text-ink-muted">Project name</span>

@@ -156,7 +156,7 @@ export default function Settings() {
               )}
               <span>{status.message}</span>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
                 <div className="text-xs text-ink-muted">Last sync</div>
                 <div>{status.lastSync ?? 'Never'}</div>

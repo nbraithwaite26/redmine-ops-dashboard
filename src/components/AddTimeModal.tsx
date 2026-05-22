@@ -68,7 +68,7 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
             <X size={18} />
           </button>
         </div>
-        <div className="p-5 grid grid-cols-2 gap-4 text-sm">
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <label>
             <div className="text-xs text-ink-muted mb-1">Date</div>
             <input
@@ -150,7 +150,7 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
               ))}
             </select>
           </label>
-          <label className="col-span-2">
+          <label className="sm:col-span-2">
             <div className="text-xs text-ink-muted mb-1">Comment</div>
             <input
               className="modal-input"

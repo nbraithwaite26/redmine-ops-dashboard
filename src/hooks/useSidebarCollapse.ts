@@ -10,6 +10,13 @@ interface Args {
    * deterministic testing.
    */
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+  /**
+   * Media query that, when matched on first render with no stored value,
+   * makes the sidebar default to collapsed. Used so first-time mobile
+   * visitors see the page content instead of an overlay covering it.
+   * Pass `null` to disable. Defaults to `(max-width: 767px)`.
+   */
+  defaultCollapsedQuery?: string | null;
 }
 
 export interface UseSidebarCollapseResult {
@@ -27,12 +34,19 @@ export function useSidebarCollapse({
   storageKey = 'rod.sidebar.collapsed',
   shortcutKey = '[',
   storage,
+  defaultCollapsedQuery = '(max-width: 767px)',
 }: Args = {}): UseSidebarCollapseResult {
   const effectiveStorage = storage === undefined ? safeLocalStorage() : storage;
 
   const [collapsed, setCollapsedState] = useState<boolean>(() => {
-    if (!effectiveStorage) return false;
-    return effectiveStorage.getItem(storageKey) === '1';
+    const stored = effectiveStorage?.getItem(storageKey);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+    // No stored preference yet — fall back to viewport-width default.
+    if (defaultCollapsedQuery && typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia(defaultCollapsedQuery).matches;
+    }
+    return false;
   });
 
   const setCollapsed = useCallback(

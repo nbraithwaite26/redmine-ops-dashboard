@@ -135,7 +135,7 @@ function KpiPanel({ metrics }: { metrics: ReturnType<typeof buildReportMetrics> 
   const filtered = metrics.filter((m) => kpiIds.has(m.id));
   return (
     <div data-testid="panel-kpi" className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {filtered.map((metric) => (
           <DashboardCard key={metric.id} metric={metric} />
         ))}
@@ -160,7 +160,7 @@ function IssueReportsPanel({
   const filtered = metrics.filter((m) => issueIds.has(m.id));
   return (
     <div data-testid="panel-issues" className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {filtered.map((metric) => (
           <DashboardCard key={metric.id} metric={metric} />
         ))}

@@ -4,6 +4,7 @@ import RightPanel from './RightPanel';
 import Sidebar from './Sidebar';
 import StatusBanner from './StatusBanner';
 import TopBar from './TopBar';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import { useSyncBanner } from '../hooks/useSyncBanner';
 import { useTheme } from '../hooks/useTheme';
@@ -19,8 +20,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     mockMode,
   });
   const isSyncing = status.kind === 'syncing';
-  const { collapsed, toggle } = useSidebarCollapse();
+  const { collapsed, toggle, setCollapsed } = useSidebarCollapse();
   const { effectiveTheme, toggle: toggleTheme } = useTheme();
+  // `md` breakpoint in Tailwind is 768px — below it the sidebar floats
+  // over content as an overlay rather than pushing the main column.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const showMobileBackdrop = !isDesktop && !collapsed;
 
   // Keyboard shortcut: `]` toggles theme (pairs with `[` for sidebar).
   useEffect(() => {
@@ -92,10 +97,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </div>
       <div className="flex flex-1 items-start">
-        {/* Sticky sidebar — stays in view while main scrolls. */}
+        {/* Sidebar — sticky-push on desktop, fixed/overlay below `md`. */}
         <Sidebar collapsed={collapsed} onToggle={toggle} />
+        {showMobileBackdrop && (
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            data-testid="sidebar-backdrop"
+            onClick={() => setCollapsed(true)}
+            className="fixed inset-0 top-14 z-30 bg-black/30 md:hidden"
+          />
+        )}
         <main className="flex-1 min-w-0">
-          <div className="max-w-[1400px] mx-auto p-6">{children}</div>
+          <div className="max-w-[1400px] mx-auto p-4 md:p-6">{children}</div>
         </main>
         {showRightPanel && <RightPanel />}
       </div>

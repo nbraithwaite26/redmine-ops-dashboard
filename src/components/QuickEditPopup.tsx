@@ -84,7 +84,7 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
           </button>
         </div>
 
-        <div className="p-5 grid grid-cols-2 gap-4 text-sm">
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <Field label="Status">
             <select
               className="input"
@@ -180,7 +180,7 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
           <div className="text-sm font-semibold text-ink mb-2 flex items-center gap-2">
             <Timer size={14} /> Log time
           </div>
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <Field label="Date">
               <input
                 type="date"
@@ -263,7 +263,7 @@ function Field({
   full?: boolean;
 }) {
   return (
-    <label className={full ? 'col-span-2 block' : 'block'}>
+    <label className={full ? 'sm:col-span-2 block' : 'block'}>
       <div className="text-xs text-ink-muted mb-1">{label}</div>
       {children}
     </label>
