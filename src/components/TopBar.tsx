@@ -35,10 +35,13 @@ export default function TopBar({
   effectiveTheme,
   onToggleTheme,
 }: Props) {
-  // Logo: drop your PNG at `public/logo.png` and it will appear here.
-  // Falls back to the ClipboardList badge when the file is missing.
-  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
-  const [logoFailed, setLogoFailed] = useState(false);
+  // Theme-aware logo. Light mode loads `public/logo.png`; dark mode loads
+  // `public/logo-white.png`. Falls back to the ClipboardList badge if the
+  // file for the active theme is missing.
+  const logoFile = effectiveTheme === 'dark' ? 'logo-white.png' : 'logo.png';
+  const logoSrc = `${import.meta.env.BASE_URL}${logoFile}`;
+  const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set());
+  const logoFailed = failedLogos.has(logoFile);
 
   return (
     <header
@@ -72,11 +75,19 @@ export default function TopBar({
           </div>
         ) : (
           <img
+            key={logoFile}
             src={logoSrc}
             alt="Aircraft Engineering Redmine logo"
             data-testid="logo-image"
+            data-logo-variant={logoFile}
             className="h-8 w-8 object-contain rounded"
-            onError={() => setLogoFailed(true)}
+            onError={() =>
+              setFailedLogos((prev) => {
+                const next = new Set(prev);
+                next.add(logoFile);
+                return next;
+              })
+            }
           />
         )}
         <div className="font-semibold tracking-tight">Aircraft Engineering Redmine</div>
