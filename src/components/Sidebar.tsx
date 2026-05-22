@@ -22,7 +22,7 @@ const links = [
   { to: '/past-due', label: 'Past Due', icon: AlarmClock },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/project-builder', label: 'Project Builder', icon: Hammer },
-  { to: '/resources', label: 'Resource Management', icon: Users },
+  { to: '/resources/team', label: 'Resource Management', icon: Users },
   { to: '/time', label: 'Time Tracking', icon: CalendarRange },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/directory', label: 'Directory', icon: Library },

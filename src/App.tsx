@@ -23,7 +23,9 @@ export default function App() {
         <Route path="/past-due" element={<PastDue />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/project-builder" element={<ProjectBuilder />} />
-        <Route path="/resources" element={<ResourceManagement />} />
+        <Route path="/resources" element={<Navigate to="/resources/personal" replace />} />
+        <Route path="/resources/personal" element={<ResourceManagement view="personal" />} />
+        <Route path="/resources/team" element={<ResourceManagement view="team" />} />
         <Route path="/time" element={<TimeTracking />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/directory" element={<Directory />} />
