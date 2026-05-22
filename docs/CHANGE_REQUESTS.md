@@ -291,6 +291,46 @@ removes a hidden dependency.
 
 ---
 
+## #14 — Document-scroll layout + sticky sidebars (no bottom dead-space)
+
+**Status:** ✅ Shipped
+
+**Request:** Fix scrolling so the page doesn't leave a big empty space at
+the bottom — pages with short main content were showing an obvious
+canvas-colored gap below the content while the right panel still extended
+further down.
+
+**Root cause:** AppShell forced the inner flex row to viewport height with
+`flex-1 min-h-0`, each panel had `overflow-y-auto` (its own scroll), and
+`<main>` had `flex-1` so it grew to row height — leaving canvas color
+below short content. Visually obvious in dark mode where the canvas is
+near-black.
+
+**Fix:**
+- AppShell switches from `h-full flex flex-col` + internal per-panel
+  scroll to `min-h-screen flex flex-col` with **document-level scroll**.
+- TopBar + StatusBanner sit in a `sticky top-0 z-30` wrapper so they
+  remain pinned to the viewport top while the page scrolls.
+- Sidebar gets `sticky top-14 self-start` with `min/max-height: calc(100vh
+  - 3.5rem)` (inline style; Tailwind's arbitrary-value parser misreads
+  the dash inside calc()) so the rail visually fills the full screen
+  alongside whatever main content is displayed.
+- RightPanel gets the same sticky positioning + max-height so it shows a
+  scrollbar internally if its content exceeds the visible area, but
+  doesn't artificially stretch.
+- Main column drops `overflow-y-auto` and now flows naturally with the
+  document scroll.
+- `index.css` switches `html/body/#root` from `height: 100%` to
+  `min-height: 100%` and lets the body scroll.
+
+**Visual result:**
+- Short pages (Home, Tasks) fit one screen; sidebar fills full height; no
+  visible gap.
+- Long pages (Resource Management) scroll naturally; TopBar/banner/
+  sidebar/right-panel all stay sticky.
+
+---
+
 ## #13 — Remove workspaces sidebar, full-height yellow rail, popout, branded chrome
 
 **Status:** ✅ Shipped

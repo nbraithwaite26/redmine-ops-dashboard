@@ -65,27 +65,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const showRightPanel = !ROUTES_WITHOUT_RIGHT_PANEL.has(location.pathname);
 
   return (
-    <div className="h-full flex flex-col">
-      <TopBar
-        apiConnected={apiConnected}
-        mockMode={mockMode}
-        isSyncing={isSyncing}
-        onClickSync={handleSync}
-        sidebarCollapsed={collapsed}
-        onToggleSidebar={toggle}
-        effectiveTheme={effectiveTheme}
-        onToggleTheme={toggleTheme}
-      />
-      {banner && (
-        <StatusBanner
-          severity={banner.severity}
-          message={banner.message}
-          onDismiss={banner.onDismiss}
+    <div className="min-h-screen flex flex-col">
+      {/* TopBar + StatusBanner stack at the very top of the document.
+          The whole page scrolls naturally — sidebar and right panel are
+          sticky so they remain visible alongside the scrolling main column.
+          This eliminates the dead-space pattern that appeared when the row
+          was forced to viewport height and main content was shorter than
+          the right panel. */}
+      <div className="sticky top-0 z-30">
+        <TopBar
+          apiConnected={apiConnected}
+          mockMode={mockMode}
+          isSyncing={isSyncing}
+          onClickSync={handleSync}
+          sidebarCollapsed={collapsed}
+          onToggleSidebar={toggle}
+          effectiveTheme={effectiveTheme}
+          onToggleTheme={toggleTheme}
         />
-      )}
-      <div className="flex flex-1 min-h-0 items-stretch">
+        {banner && (
+          <StatusBanner
+            severity={banner.severity}
+            message={banner.message}
+            onDismiss={banner.onDismiss}
+          />
+        )}
+      </div>
+      <div className="flex flex-1 items-start">
+        {/* Sticky sidebar — stays in view while main scrolls. */}
         <Sidebar collapsed={collapsed} onToggle={toggle} />
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main className="flex-1 min-w-0">
           <div className="max-w-[1400px] mx-auto p-6">{children}</div>
         </main>
         {showRightPanel && <RightPanel />}

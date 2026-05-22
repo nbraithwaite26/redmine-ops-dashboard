@@ -46,9 +46,17 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
       style={{
         backgroundColor: 'var(--brand-surface)',
         color: 'var(--brand-surface-text)',
+        // Use inline style for the calc() arbitrary value so we don't
+        // depend on Tailwind's arbitrary-value parser handling dashes
+        // inside calc(). Sidebar is exactly viewport-minus-TopBar tall
+        // so it visually fills the entire screen height when sticky.
+        minHeight: 'calc(100vh - 3.5rem)',
+        maxHeight: 'calc(100vh - 3.5rem)',
       }}
       className={clsx(
-        'shrink-0 self-stretch h-full flex flex-col py-3 gap-1 border-r transition-[width] duration-150',
+        // Sticky-top below the TopBar (h-14 = 3.5rem) so the rail stays
+        // visible while the page scrolls.
+        'shrink-0 sticky top-14 self-start flex flex-col py-3 gap-1 border-r transition-[width] duration-150 overflow-y-auto',
         collapsed ? 'w-14 items-center' : 'w-52 items-stretch px-2',
       )}
       role="navigation"

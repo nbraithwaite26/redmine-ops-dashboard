@@ -93,7 +93,13 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  /* Allow the document to scroll naturally instead of forcing per-panel
+     internal scroll. Sidebars become sticky via the AppShell. */
+  overflow-y: auto;
 }
 
 body {
