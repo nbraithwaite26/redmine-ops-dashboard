@@ -7,12 +7,12 @@ import {
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
 import {
-  MOCK_TODAY,
   daysOverdue,
   formatDate,
   formatHours,
   isOverdue,
   statusPill,
+  today,
 } from '../lib/format';
 import PriorityPill from './PriorityPill';
 import ProgressBar from './ProgressBar';
@@ -38,8 +38,9 @@ export default function IssueRow({
   onOpen,
   onQuickEdit,
 }: Props) {
-  const overdue = isOverdue(issue.dueDate, MOCK_TODAY);
-  const overdueDays = daysOverdue(issue.dueDate, MOCK_TODAY);
+  const now = today();
+  const overdue = isOverdue(issue.dueDate, now);
+  const overdueDays = daysOverdue(issue.dueDate, now);
   const highPriority = issue.priority === 'Urgent' || issue.priority === 'Immediate';
   return (
     <tr

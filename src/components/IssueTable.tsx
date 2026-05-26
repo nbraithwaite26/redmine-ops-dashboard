@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
-import { MOCK_TODAY, daysOverdue } from '../lib/format';
+import { daysOverdue, today } from '../lib/format';
 import { useTableState } from '../hooks/useTableState';
 import IssueRow from './IssueRow';
 
@@ -52,7 +52,7 @@ function sortValue(i: Issue, key: SortKey): string | number {
     case 'spentHours': return i.spentHours;
     case 'estimatedHours': return i.estimatedHours ?? 0;
     case 'doneRatio': return i.doneRatio;
-    case 'daysOverdue': return daysOverdue(i.dueDate, MOCK_TODAY);
+    case 'daysOverdue': return daysOverdue(i.dueDate, today());
     default: return 0;
   }
 }

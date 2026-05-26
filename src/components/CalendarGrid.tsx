@@ -2,18 +2,19 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue } from '../types/redmine';
-import { isOverdue, MOCK_TODAY, priorityPill } from '../lib/format';
+import { isOverdue, priorityPill, today } from '../lib/format';
 
 interface Props {
   issues: Issue[];
-  /** Initial month to show (defaults to MOCK_TODAY). */
+  /** Initial month to show. Defaults to mock-mode-aware today(). */
   initialMonth?: Date;
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function CalendarGrid({ issues, initialMonth = MOCK_TODAY }: Props) {
-  const [month, setMonth] = useState(() => startOfMonth(initialMonth));
+export default function CalendarGrid({ issues, initialMonth }: Props) {
+  const todayDate = useMemo(() => today(), []);
+  const [month, setMonth] = useState(() => startOfMonth(initialMonth ?? todayDate));
 
   const cells = useMemo(() => {
     const first = new Date(month);
@@ -76,7 +77,7 @@ export default function CalendarGrid({ issues, initialMonth = MOCK_TODAY }: Prop
           const inMonth = d.getMonth() === month.getMonth();
           const iso = d.toISOString().slice(0, 10);
           const dayIssues = byDate.get(iso) ?? [];
-          const isToday = iso === MOCK_TODAY.toISOString().slice(0, 10);
+          const isToday = iso === todayDate.toISOString().slice(0, 10);
           return (
             <div
               key={iso}
@@ -100,7 +101,7 @@ export default function CalendarGrid({ issues, initialMonth = MOCK_TODAY }: Prop
                     href={`#/tasks?id=${i.id}`}
                     className={clsx(
                       'text-[10px] truncate px-1 py-0.5 rounded',
-                      isOverdue(i.dueDate, MOCK_TODAY)
+                      isOverdue(i.dueDate, todayDate)
                         ? 'bg-red-50 text-red-800'
                         : 'bg-gray-50 text-ink-soft',
                     )}

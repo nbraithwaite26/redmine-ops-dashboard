@@ -2,9 +2,23 @@ import type { IssuePriority, IssueStatus } from '../types/redmine';
 
 /**
  * Mock-mode "today" used by demo pages so the data appears stable. Real
- * call sites should pass `new Date()` explicitly via the `today` parameter.
+ * call sites should pass `new Date()` explicitly via the `today` parameter,
+ * or use the `today()` helper below which picks the right value based on
+ * VITE_MOCK_MODE.
  */
 export const MOCK_TODAY = new Date('2026-05-21');
+
+const MOCK_MODE =
+  (import.meta.env.VITE_MOCK_MODE ?? 'true').toString().toLowerCase() !== 'false';
+
+/**
+ * Returns the "today" reference. Frozen to MOCK_TODAY in mock mode so demo
+ * data stays stable; a fresh `new Date()` in real mode so overdue / day
+ * counts reflect the actual calendar.
+ */
+export function today(): Date {
+  return MOCK_MODE ? MOCK_TODAY : new Date();
+}
 
 export function isOverdue(dueDate: string | null, today: Date = new Date()): boolean {
   if (!dueDate) return false;
