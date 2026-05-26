@@ -7,7 +7,7 @@ import {
   getTimeEntries,
   getWeeklyHours,
 } from '../services/redmineApi';
-import { buildTimeMetrics, mockIssues, mockProjects } from '../data/mockData';
+import { buildTimeMetrics } from '../data/mockData';
 import { useAsyncResource } from '../hooks/useAsyncResource';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { useTimeEntryActions } from '../hooks/useTimeEntryActions';
@@ -60,8 +60,7 @@ export default function TimeTracking() {
     }
     const map = new Map<string, TimeEntry[]>();
     entries.forEach((e) => {
-      const proj = mockProjects.find((p) => p.id === e.projectId);
-      const k = proj?.name ?? 'Unknown';
+      const k = e.projectName ?? 'Unknown';
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(e);
     });
@@ -134,15 +133,13 @@ export default function TimeTracking() {
             </thead>
             <tbody>
               {entries.map((e) => {
-                const issue = mockIssues.find((i) => i.id === e.issueId);
-                const project = mockProjects.find((p) => p.id === e.projectId);
                 return (
                   <tr key={e.id} className="border-t border-gray-100 hover:bg-canvas/60">
                     <td className="px-3 py-2">{e.spentOn}</td>
                     <td className="px-3 py-2">{e.user.name}</td>
-                    <td className="px-3 py-2">{project?.name ?? '—'}</td>
+                    <td className="px-3 py-2">{e.projectName ?? '—'}</td>
                     <td className="px-3 py-2">
-                      {issue ? <a className="link" href={`#/tasks?id=${issue.id}`}>#{issue.id}</a> : '—'}
+                      {e.issueId ? <a className="link" href={`#/tasks?id=${e.issueId}`}>#{e.issueId}</a> : '—'}
                     </td>
                     <td className="px-3 py-2">{e.activity}</td>
                     <td className="px-3 py-2 font-medium">{e.hours}h</td>
