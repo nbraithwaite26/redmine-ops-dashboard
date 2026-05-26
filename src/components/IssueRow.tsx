@@ -73,15 +73,15 @@ export default function IssueRow({
           </span>
         </button>
       </td>
-      <td className="px-2 py-2 text-ink-soft">{issue.projectName}</td>
+      <td className="px-2 py-2 text-ink-soft hidden md:table-cell">{issue.projectName}</td>
       <td className="px-2 py-2">
         <span className={statusPill(issue.status)}>{issue.status}</span>
       </td>
       <td className="px-2 py-2">
         <PriorityPill priority={issue.priority} />
       </td>
-      <td className="px-2 py-2 text-ink-soft">{issue.assignee?.name ?? '—'}</td>
-      <td className="px-2 py-2 text-ink-soft">{formatDate(issue.startDate)}</td>
+      <td className="px-2 py-2 text-ink-soft hidden md:table-cell">{issue.assignee?.name ?? '—'}</td>
+      <td className="px-2 py-2 text-ink-soft hidden lg:table-cell">{formatDate(issue.startDate)}</td>
       <td
         className={clsx(
           'px-2 py-2',
@@ -99,15 +99,15 @@ export default function IssueRow({
           )}
         </td>
       )}
-      <td className="px-2 py-2 text-ink-soft">{formatHours(issue.spentHours)}</td>
-      <td className="px-2 py-2 text-ink-soft">{formatHours(issue.estimatedHours)}</td>
-      <td className="px-2 py-2 text-ink-soft">
+      <td className="px-2 py-2 text-ink-soft hidden md:table-cell">{formatHours(issue.spentHours)}</td>
+      <td className="px-2 py-2 text-ink-soft hidden lg:table-cell">{formatHours(issue.estimatedHours)}</td>
+      <td className="px-2 py-2 text-ink-soft hidden md:table-cell">
         <ProgressBar
           value={issue.doneRatio}
           ariaLabel={`${issue.doneRatio}% done`}
         />
       </td>
-      <td className="px-2 py-2 text-ink-soft truncate max-w-[240px]">
+      <td className="px-2 py-2 text-ink-soft truncate max-w-[240px] hidden lg:table-cell">
         {issue.nextAction ?? '—'}
       </td>
       <td className="px-2 py-2">

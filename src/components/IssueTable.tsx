@@ -91,9 +91,13 @@ export default function IssueTable({
   });
 
   const headerCell = useCallback(
-    (label: string, key: SortKey) => (
+    (label: string, key: SortKey, hideBelow?: 'md' | 'lg') => (
       <th
-        className="px-2 py-2 cursor-pointer select-none"
+        className={clsx(
+          'px-2 py-2 cursor-pointer select-none',
+          hideBelow === 'md' && 'hidden md:table-cell',
+          hideBelow === 'lg' && 'hidden lg:table-cell',
+        )}
         onClick={() => table.toggleSort(key)}
       >
         <span
@@ -114,32 +118,32 @@ export default function IssueTable({
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-100">
-        <div>
-          <div className="font-semibold text-ink">{title}</div>
+      <div className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100">
+        <div className="min-w-0">
+          <div className="font-semibold text-ink truncate">{title}</div>
           <div className="text-xs text-ink-muted">
             Showing {table.rows.length} of {issues.length}
             {table.selected.size > 0 && ` · ${table.selected.size} selected`}
           </div>
         </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2 px-2 py-1 bg-canvas rounded-md border border-gray-200">
-          <Search size={14} className="text-ink-muted" />
+        <div className="flex-1 min-w-0" />
+        <div className="flex items-center gap-2 px-2 py-1 bg-canvas rounded-md border border-gray-200 min-w-0">
+          <Search size={14} className="text-ink-muted shrink-0" />
           <input
             value={table.query}
             onChange={(e) => table.setQuery(e.target.value)}
-            className="bg-transparent outline-none text-sm w-56"
+            className="bg-transparent outline-none text-sm w-32 sm:w-56 min-w-0"
             placeholder="Search this table"
             aria-label={`Search ${title}`}
           />
         </div>
-        <button className="btn-ghost" aria-label="Filter">
+        <button className="btn-ghost hidden sm:inline-flex" aria-label="Filter">
           <Filter size={14} /> Filter
         </button>
         <button className="btn-secondary" onClick={onRefresh} aria-label="Refresh">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> <span className="hidden sm:inline">Refresh</span>
         </button>
-        <button className="btn-secondary" onClick={onExport} aria-label="Export">
+        <button className="btn-secondary hidden sm:inline-flex" onClick={onExport} aria-label="Export">
           <Download size={14} /> Export
         </button>
         {table.selected.size > 0 && (
@@ -165,17 +169,17 @@ export default function IssueTable({
               </th>
               {headerCell('ID', 'id')}
               {headerCell('Subject', 'subject')}
-              {headerCell('Project', 'project')}
+              {headerCell('Project', 'project', 'md')}
               {headerCell('Status', 'status')}
               {headerCell('Priority', 'priority')}
-              {headerCell('Assignee', 'assignee')}
-              {headerCell('Start', 'startDate')}
+              {headerCell('Assignee', 'assignee', 'md')}
+              {headerCell('Start', 'startDate', 'lg')}
               {headerCell('Due', 'dueDate')}
               {showDaysOverdue && headerCell('Days Overdue', 'daysOverdue')}
-              {headerCell('Spent', 'spentHours')}
-              {headerCell('Est.', 'estimatedHours')}
-              {headerCell('% Done', 'doneRatio')}
-              <th className="px-2 py-2">Next action</th>
+              {headerCell('Spent', 'spentHours', 'md')}
+              {headerCell('Est.', 'estimatedHours', 'lg')}
+              {headerCell('% Done', 'doneRatio', 'md')}
+              <th className="px-2 py-2 hidden lg:table-cell">Next action</th>
               <th className="px-2 py-2 w-24">Actions</th>
             </tr>
           </thead>

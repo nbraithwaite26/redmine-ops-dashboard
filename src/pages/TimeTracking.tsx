@@ -70,9 +70,9 @@ export default function TimeTracking() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <h1 className="text-2xl font-semibold">Time Tracking</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={range}
             onChange={(e) => setRange(e.target.value as Range)}
@@ -91,9 +91,12 @@ export default function TimeTracking() {
             <option>User</option>
             <option>Project</option>
           </select>
-          <button className="btn-secondary"><Download size={14} /> Export</button>
+          <button className="btn-secondary hidden sm:inline-flex">
+            <Download size={14} /> Export
+          </button>
           <button className="btn-brand" onClick={() => setAddOpen(true)}>
-            <Plus size={14} /> Add time
+            <Plus size={14} /> <span className="hidden sm:inline">Add time</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
