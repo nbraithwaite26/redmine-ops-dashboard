@@ -20,6 +20,10 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32).optional(),
   HISTORY_DB: z.string().default('./server/data/history.jsonl'),
   COOKIE_SECURE: z.enum(['true', 'false']).default('false'),
+  // Optional. When set, the session + rate-limit stores switch from
+  // process-local maps to Redis so they survive restarts and shard across
+  // backend instances. Plan §13.
+  REDIS_URL: z.string().url().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -53,6 +57,7 @@ export const config = {
     historyDb: env.HISTORY_DB,
     cookieSecure: env.COOKIE_SECURE === 'true',
   },
+  redisUrl: env.REDIS_URL,
 } as const;
 
 export type AppConfig = typeof config;

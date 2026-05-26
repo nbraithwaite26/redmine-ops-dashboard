@@ -86,7 +86,7 @@ server/                       Backend (Hono on :8787)
       readOnly.ts                 403 READ_ONLY on non-GET to /api/redmine/* when
                                   REDMINE_READ_ONLY=true
       errorHandler.ts             uniform { error: { code, message, requestId } } shape
-      rateLimit.ts                process-local token bucket (default 20 req/s/IP)
+      rateLimit.ts                IP rate limit; Redis-backed when REDIS_URL is set, else process-local token bucket (default 20 req/s/IP, burst 40)
       session.ts                  session() + requireSession()
 
     auth/
@@ -94,7 +94,8 @@ server/                       Backend (Hono on :8787)
       cookies.ts                  HMAC-SHA256 signed session cookies (HttpOnly+SameSite=Lax)
 
     store/
-      sessionStore.ts             in-memory session map (12h rolling)
+      redisClient.ts              lazy ioredis singleton; null when REDIS_URL is unset
+      sessionStore.ts             session store (12h rolling); Redis-backed when REDIS_URL is set, else in-memory Map
       historyStore.ts             JSONL append-only sync + login event store
 
     routes/
@@ -175,6 +176,24 @@ fan-out the prior design had.
 the network. The frontend writes the timestamp to `localStorage` under
 `redmine-ops:last-sync-at` so the "Last sync HH:MM" chip in the TopBar
 persists across reloads.
+
+### Session + rate-limit storage
+
+Both stores have a Redis-backed branch and an in-memory fallback. The
+backend reads `REDIS_URL` at startup:
+
+- **Unset (default):** sessions live in a process-local `Map`; the rate
+  limiter uses a process-local token bucket. Fine for a single-instance
+  deploy; sessions reset on restart.
+- **Set:** `server/src/store/redisClient.ts` lazily constructs an `ioredis`
+  client. `sessionStore` uses `SET session:<id> <json> EX <ttl>` /
+  `GET` / `EXPIRE` / `DEL`. The rate limiter uses a per-second fixed
+  window via `INCR rl:<ip>:<sec>` with `EXPIRE`. Sessions survive restart
+  and shard across backend instances behind a load balancer.
+
+Connection errors are logged but never throw — a Redis outage degrades
+silently to a single-instance behavior rather than taking down the
+backend.
 
 ## Yellow brand color
 

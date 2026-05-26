@@ -1,9 +1,13 @@
 import type { MiddlewareHandler } from 'hono';
+import { getRedis } from '../store/redisClient.js';
 
 /**
- * Process-local token bucket. Acceptable for a single-process Node deploy.
- * Plan §6 Notes: swap for a Redis-backed RateLimitStore for multi-replica
- * deployments.
+ * Rate-limit IP traffic to /api/*. Two backends:
+ *
+ *  - Redis (when REDIS_URL is set): atomic INCR rl:<ip>:<sec> per 1s window
+ *    with EXPIRE; survives restarts and shards across backend instances.
+ *  - In-memory (fallback): process-local token bucket. Acceptable for a
+ *    single-process Node deploy. Plan §13.
  */
 interface Bucket {
   tokens: number;
@@ -14,6 +18,10 @@ const buckets = new Map<string, Bucket>();
 
 const RATE_PER_SECOND = 20;
 const BURST = 40;
+const WINDOW_SECONDS = 1;
+// Redis branch uses fixed-window-per-second, so limit = burst keeps the
+// effective ceiling consistent with the in-memory token bucket.
+const REDIS_LIMIT_PER_WINDOW = BURST;
 
 function refill(bucket: Bucket, now: number) {
   const elapsedSeconds = (now - bucket.updatedAt) / 1000;
@@ -21,11 +29,45 @@ function refill(bucket: Bucket, now: number) {
   bucket.updatedAt = now;
 }
 
-export const rateLimit = (): MiddlewareHandler => async (c, next) => {
-  const key =
+function clientKey(c: import('hono').Context): string {
+  return (
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
     c.req.header('x-real-ip') ??
-    'local';
+    'local'
+  );
+}
+
+function rejected(c: import('hono').Context) {
+  return c.json(
+    {
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Too many requests; slow down.',
+        requestId: c.get('requestId'),
+      },
+    },
+    429,
+  );
+}
+
+export const rateLimit = (): MiddlewareHandler => async (c, next) => {
+  const key = clientKey(c);
+  const redis = await getRedis();
+
+  if (redis) {
+    const windowSec = Math.floor(Date.now() / 1000);
+    const redisKey = `rl:${key}:${windowSec}`;
+    const count = await redis.incr(redisKey);
+    if (count === 1) {
+      await redis.expire(redisKey, WINDOW_SECONDS + 1);
+    }
+    if (count > REDIS_LIMIT_PER_WINDOW) {
+      return rejected(c);
+    }
+    await next();
+    return;
+  }
+
   const now = Date.now();
   let bucket = buckets.get(key);
   if (!bucket) {
@@ -35,17 +77,13 @@ export const rateLimit = (): MiddlewareHandler => async (c, next) => {
     refill(bucket, now);
   }
   if (bucket.tokens < 1) {
-    return c.json(
-      {
-        error: {
-          code: 'RATE_LIMITED',
-          message: 'Too many requests; slow down.',
-          requestId: c.get('requestId'),
-        },
-      },
-      429,
-    );
+    return rejected(c);
   }
   bucket.tokens -= 1;
   await next();
 };
+
+/** Test-only. */
+export function __clearMemBuckets() {
+  buckets.clear();
+}

@@ -13,7 +13,7 @@ export const session = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   if (cookieValue) {
     const sessionId = verifyCookieValue(cookieValue);
     if (sessionId) {
-      const s = refreshSession(sessionId) ?? getSession(sessionId);
+      const s = (await refreshSession(sessionId)) ?? (await getSession(sessionId));
       if (s) c.set('sessionUser', s.user);
     }
   }

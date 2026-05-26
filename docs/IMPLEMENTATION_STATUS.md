@@ -2,7 +2,7 @@
 
 Snapshot of the work executed against [`docs/INTEGRATION_PLAN.md`](./INTEGRATION_PLAN.md). Section numbers below match the plan's §9 implementation order.
 
-Last updated: 2026-05-26 (Phase 5 polish complete — Phase G responsive sweep + a11y landmarks on Hours accordion).
+Last updated: 2026-05-26 (Section 13 shipped — Redis-backed session + rate-limit stores behind `REDIS_URL`).
 
 ## Quick handoff for the next session
 
@@ -20,12 +20,11 @@ ba780f5  Resolve HISTORY_DB against repo root, not CWD
 46ac7f6 → 1f50c26  Backend workspace + frontend wiring + Admin tabs + docs — 4 commits
 ```
 
-**What's left to do.** Two items, both gated on external decisions:
+**What's left to do.** One item, gated on an external decision:
 
-- **Section 13 — Redis-backed stores** (`SessionStore` + `RateLimitStore`). Pure prod-hardening; no observable change in dev because the implementation falls back to in-memory when `REDIS_URL` is unset. Only matters when the backend goes multi-instance or you care about sessions surviving a deploy. Detailed rationale in chat history of the originating session; the short version is "skip until you actually need it." Tracked below.
 - **Section 15 — Final validation against live Redmine.** Requires flipping `REDMINE_READ_ONLY=false` in `.env.local` and restarting the backend. Then smoke every mutation path. Risk: real writes against the connected Redmine instance.
 
-Everything else from plan §9 and the original scope list is shipped, including writes, the Hours redesign, list-optimistic refactor of parent pages, custom-fields write-through, cleanup wart-fixes, responsive sweep, and a11y landmarks.
+Everything else from plan §9 and the original scope list is shipped, including writes, the Hours redesign, list-optimistic refactor of parent pages, custom-fields write-through, cleanup wart-fixes, responsive sweep, a11y landmarks, and the Redis-backed session + rate-limit stores.
 
 **Servers (state at session end):**
 - Backend on `:8787` running `npm --workspace server run start`; `mode=read-only`.
@@ -56,7 +55,7 @@ Everything else from plan §9 and the original scope list is shipped, including 
 | Hours redesign | plan §1 | ✅ done | Hours page replaced with user-card landing showing this-week + last-week sections. Drilldown: user → projects → tasks. Per-task "Log time" pre-seeds AddTimeModal. AddTimeModal rewritten: no user dropdown, dependent project→task dropdown, past-entries panel, status-bump from `New` → `In Progress` on first time log. `hoursAggregate.ts` + 19 unit tests; `Hours.test.tsx` + 4 tests; `AddTimeModal.test.tsx` + 5 tests. |
 | 12 polish — custom fields write | plan §7.8 | ✅ done | TicketDrawer CustomFields section becomes editable when `!readOnly`. Type-aware inputs (text / number / checkbox). Backend PATCH allowlist gains `customFields[]` mapped to Redmine snake_case `custom_fields` with string-coerced values. |
 | Cleanup batch | scope #18, #19, #20, #21 | ✅ done | HISTORY_DB resolves against repo root (no more `server/server/data/`). `#/my-tasks?id=...` links → `#/tasks?id=...`. `?id=` on `/tasks` auto-opens the drawer once per visit. Orphaned `MyHours.tsx` + `TeamHours.tsx` deleted (redirects in `App.tsx` cover legacy bookmarks). |
-| 13 — Rate-limit production story | §6 Notes | ⏳ not started | Redis-backed `RateLimitStore` + `SessionStore`. Currently in-memory single-process. Toggle behind `REDIS_URL` env var when added. **Recommended skip** for now — only matters under multi-instance deploys. See handoff section above for the full rationale. |
+| 13 — Rate-limit production story | §6 Notes | ✅ done | `server/src/store/redisClient.ts` lazily constructs an `ioredis` client when `REDIS_URL` is set. `sessionStore` becomes `SET session:<id> <json> EX <ttl>` / `GET` / `EXPIRE` / `DEL`; `rateLimit` middleware becomes per-second `INCR rl:<ip>:<sec>` + `EXPIRE`. Both fall back to in-memory when `REDIS_URL` is unset — zero behavior change for single-instance dev. Connection errors logged, never throw. 9 new tests across `store.sessionStore.test.ts` + `middleware.rateLimit.test.ts` (ioredis mocked via `vi.doMock`). |
 | 14 — Doc updates | §9 Step 14 | ✅ done | README / ARCHITECTURE / API rewritten to reflect the two-process app. Each new feature commit updates this status doc. |
 | 15 (sub) — users/:id/projects endpoint | scope #15 | ❌ skipped | Reconsidered after Hours shipped. The Hours card requirement is "projects under their tasks" — derive-from-tasks already gives that semantic. A memberships endpoint would surface projects with 0 tasks (noise). Not implementing. |
 | Phase G — Responsive sweep | refactor log | ✅ done | IssueTable controls bar flex-wraps; column visibility staged at sm/md/lg breakpoints (essentials always, +project/assignee/spent/%done at md, +start/estimated/next-action at lg); TimeTracking header wraps with shorter mobile labels; TicketDrawer / AddTimeModal / CreateIssueModal already responsive; Hours user-cards already vertical stacks. Verified at 375×812. |
@@ -86,7 +85,8 @@ server/
       password.ts                     # bcrypt verify / hash
       cookies.ts                      # HMAC-signed session cookies
     store/
-      sessionStore.ts                 # in-memory session map, 12h rolling
+      redisClient.ts                  # lazy ioredis singleton; null when REDIS_URL unset
+      sessionStore.ts                 # 12h rolling session; Redis when REDIS_URL set, else in-memory Map
       historyStore.ts                 # JSONL append-only history (sync + login events)
     routes/
       me.ts, users.ts, projects.ts, issues.ts,
@@ -183,8 +183,8 @@ Files touched but not new (representative):
 | `npm --workspace server run typecheck` | pass |
 | `npm run lint` | pass (2 pre-existing `react-hooks/exhaustive-deps` warnings, no errors) |
 | `npm test` (frontend) | 42 files, 308 tests pass |
-| `npm run test:server` | 11 files, 62 tests pass |
-| `npm run build` | dist built (≈358 KB JS, 33 KB CSS; gzip 101 / 7 KB) |
+| `npm run test:server` | 13 files, 71 tests pass |
+| `npm run build` | dist built (≈360 KB JS, 33 KB CSS; gzip 102 / 7 KB) |
 
 ## How to run
 
@@ -216,24 +216,14 @@ Flip mock mode by setting `VITE_MOCK_MODE=true` in `.env.local` and restarting V
 - **`/api/admin/users` degrades.** The configured API key isn't a Redmine admin → `/users.json` returns 403; the backend returns `{ items: [], degraded: true, degradedReason }`. The Admin page's Users tab renders the degraded banner instead of an empty list. Permissions tab derives from per-project memberships and works around it.
 - **Custom fields catalog is sampled.** `/custom_fields.json` is admin-only and 403s; `/api/redmine/metadata` derives the catalog from a small issue sample. Treat as a hint, not a schema. Editing custom fields per-issue (write-through) works regardless because the PATCH route accepts `{ id, value }` pairs without consulting the catalog.
 - **`ResourceTimeline` still consumes three props** (`users`, `issues`, `allocations`). `getResourceAllocations` maps from `/api/redmine/gantt`. Per plan §7.8.11 this is acceptable as-is.
-- **In-memory rate limit + session store** are single-process. Plan §13 documents the Redis upgrade path.
+- **Rate limit + session store** default to single-process in-memory maps. Set `REDIS_URL` to switch to Redis (transparent — zero behavior change in dev when unset).
 - **Project due date is derived.** Redmine's `/projects.json` doesn't return a due date. The Hours card uses the **latest task dueDate** in the project as a stand-in. Tooltipped on the column header so users know.
 - **Per-user weekly target is hardcoded to 40h.** No backend field exists yet. Once one does, swap the constant in `hoursAggregate`.
 - **`ResourceTimeline` still reads `MOCK_TODAY`** indirectly via `today()`. In real mode `today()` returns `new Date()`, so this is functionally correct — just noting the wiring.
 
 ## Pointers for the next session
 
-Phase G is done; Redis and final validation are the only items left.
-
-**If picking up Redis (Section 13):**
-1. Add `ioredis` to `server/package.json` (latest 5.x). Run `npm install` at repo root.
-2. Toggle by `REDIS_URL` env var. Fallback to in-memory when unset — zero behavior change for dev.
-3. Two consumers to swap:
-   - `server/src/store/sessionStore.ts` — in-memory `Map<token, { user, expiresAt }>`. Replace with `SET session:<token> <json> EX <ttlSec>` / `GET session:<token>`.
-   - `server/src/middleware/rateLimit.ts` — process-local token bucket. Replace with atomic `INCR rl:<bucket>` + `EXPIRE rl:<bucket> 60`.
-4. Add server tests that mock `ioredis` and assert the new branch fires when `REDIS_URL` is present.
-5. Document the new env var in `.env.example` and `docs/ARCHITECTURE.md`.
-6. **Honest assessment:** for a single-instance internal-ops deploy, this is over-engineering. Skip unless the deploy target actually fronts multiple backend instances with a load balancer, or the user explicitly wants sessions to survive restarts.
+Section 13 is shipped; final validation against live Redmine is the only item left.
 
 **If picking up Section 15 (final validation):**
 1. Confirm with the user before touching `REDMINE_READ_ONLY=false` — this enables real writes to their live Redmine.
@@ -260,8 +250,8 @@ npm run typecheck                          # frontend
 npm --workspace server run typecheck       # backend
 npm run lint                               # 2 pre-existing warnings, no errors
 npm test -- --run                          # 308 / 42
-npm --workspace server run test            # 62 / 11
-npm run build                              # 358 KB JS / 33 KB CSS gzipped
+npm --workspace server run test            # 71 / 13
+npm run build                              # 360 KB JS / 33 KB CSS gzipped
 ```
 
 All sections continue to honor the existing guardrails: no company data in the repo, anonymized fixtures, key only on the backend, mock mode preserved, brand and routes intact.

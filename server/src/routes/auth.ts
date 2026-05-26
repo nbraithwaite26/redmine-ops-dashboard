@@ -128,7 +128,7 @@ auth.post('/login', async (c) => {
     );
   }
 
-  const session = createSession(truncatedUser);
+  const session = await createSession(truncatedUser);
   c.header('Set-Cookie', buildSetCookieHeader(session.id, maxAgeSeconds()));
   return c.json({ user: truncatedUser, loginAt: new Date(session.createdAt).toISOString() });
 });
@@ -140,7 +140,7 @@ auth.post('/logout', async (c) => {
   const cookieValue = readCookieFromHeader(c.req.header('cookie'));
   if (cookieValue) {
     const sessionId = verifyCookieValue(cookieValue);
-    if (sessionId) destroySession(sessionId);
+    if (sessionId) await destroySession(sessionId);
   }
   c.header('Set-Cookie', buildClearCookieHeader());
   return c.json({ ok: true });
