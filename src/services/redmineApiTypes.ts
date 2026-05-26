@@ -47,7 +47,11 @@ export interface RedmineApi {
   updateIssueHierarchy(id: number, parentId: number | null): Promise<Issue>;
 
   // ─── Time ─────────────────────────────────────────────────────────────
-  getTimeEntries(): Promise<TimeEntry[]>;
+  getTimeEntries(opts?: {
+    from?: string;
+    to?: string;
+    userId?: number;
+  }): Promise<TimeEntry[]>;
   createTimeEntry(input: Partial<TimeEntry>): Promise<TimeEntry>;
   updateTimeEntry(id: number, patch: Partial<TimeEntry>): Promise<TimeEntry>;
   deleteTimeEntry(id: number): Promise<{ id: number }>;

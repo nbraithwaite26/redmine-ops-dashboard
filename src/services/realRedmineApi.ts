@@ -419,8 +419,20 @@ export const realRedmineApi: RedmineApi = {
     return updated;
   },
 
-  async getTimeEntries(): Promise<TimeEntry[]> {
-    const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', { limit: 100 });
+  async getTimeEntries(opts: {
+    from?: string;
+    to?: string;
+    userId?: number;
+  } = {}): Promise<TimeEntry[]> {
+    // Backend honors `from`, `to`, and `user_id` as passthrough query params
+    // (see server/src/routes/timeEntries.ts LIST_FILTERS). Cache key includes
+    // them via cacheKey()'s sorted-query serialization so different ranges
+    // don't collide.
+    const query: Record<string, string | number> = { limit: 100 };
+    if (opts.from) query.from = opts.from;
+    if (opts.to) query.to = opts.to;
+    if (opts.userId !== undefined) query.user_id = opts.userId;
+    const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', query);
     return res.items;
   },
 
