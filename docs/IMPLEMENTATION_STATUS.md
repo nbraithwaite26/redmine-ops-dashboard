@@ -2,34 +2,36 @@
 
 Snapshot of the work executed against [`docs/INTEGRATION_PLAN.md`](./INTEGRATION_PLAN.md). Section numbers below match the plan's §9 implementation order.
 
-Last updated: 2026-05-26 (Section 13 shipped — Redis-backed session + rate-limit stores behind `REDIS_URL`).
+Last updated: 2026-05-26 (CR #16 shipped — Hours sidebar group + team Gantt; pushed to origin/main).
 
 ## Quick handoff for the next session
 
-**Repo state:** clean working tree on `main`. Latest commits (top = newest):
+**Repo state:** clean working tree on `main`, in sync with `origin/main` (all pushed). Latest commits (top = newest):
 
 ```
+8397afe  CR #16: Hours sidebar group (Time Tracking + Resource Mgmt) + team Gantt
+1a74beb  CR #15: Projects category dashboard + All Projects as a Projects sub-link
+e66f2c0  Section 13: Redis-backed session + rate-limit stores behind REDIS_URL
+2cd4ea5  IMPLEMENTATION_STATUS handoff: Phase 5 polish complete + next-session pointers
 6528ee5  A11y polish: aria-controls + region landmarks on Hours accordion
-5ec6ce3  Phase G: responsive sweep for IssueTable + TimeTracking controls
-64e8573  Refresh IMPLEMENTATION_STATUS to reflect Phase 1-3 completion
-96aba6c  Custom fields write-through: editable in drawer, mapped through PATCH
-79f17ba  Cleanup: fix issue links, wire ?id= deep-link, drop orphaned pages
-ba780f5  Resolve HISTORY_DB against repo root, not CWD
-64e8573  (doc refresh)
-75a2af3 → c5d3233  Phase 1 (Hours) + Phase 2 (writes fan-out) — 7 commits
-46ac7f6 → 1f50c26  Backend workspace + frontend wiring + Admin tabs + docs — 4 commits
 ```
 
-**What's left to do.** One item, gated on an external decision:
+**What's left to do.**
 
+- **CR #17 — make the Dashboard tabs real** (📥 collected, not yet planned). The `Your Team's Work` / `Project Health` / `Resource Planning` tabs in `Dashboard.tsx` are cosmetic — `setTab` updates the highlight but nothing reads `tab`, so all four render the same metrics + "My Tasks" table. See CR #17 in `docs/CHANGE_REQUESTS.md`.
 - **Section 15 — Final validation against live Redmine.** Requires flipping `REDMINE_READ_ONLY=false` in `.env.local` and restarting the backend. Then smoke every mutation path. Risk: real writes against the connected Redmine instance.
 
-Everything else from plan §9 and the original scope list is shipped, including writes, the Hours redesign, list-optimistic refactor of parent pages, custom-fields write-through, cleanup wart-fixes, responsive sweep, a11y landmarks, and the Redis-backed session + rate-limit stores.
+Everything else from plan §9 and the CR backlog is shipped: writes, Hours redesign, list-optimistic refactor, custom-fields write-through, cleanup, responsive sweep, a11y, Redis stores (§13), the Projects category dashboard (CR #15), and the Hours group + team Gantt (CR #16).
+
+**Live-data gotchas discovered (CR #15/#16) — important context:**
+- The default project source is literally named **`**AV Engineering`** (the `**` is part of the name) → `AIRCRAFT ENGINEERING` (id 127). Isolated in `src/services/projectSource.ts`.
+- Live `/users.json` **403s** for the non-admin API key (returns 0 users). Anything that enumerates users (e.g. `ResourceTimeline`) must derive them another way — the team Gantt uses `getTeamSchedule()` which derives users from Gantt-row assignees.
+- Many real issues lack start/due dates, so Gantt bars are sparse; `getProjects()` and the gantt route both paginate now (project list ~100+, gantt scoped to id 127 ≈ 703 rows).
 
 **Servers (state at session end):**
-- Backend on `:8787` running `npm --workspace server run start`; `mode=read-only`.
-- Vite dev on `:5174` (port may differ — `5173` was busy when the prior agent's session restarted).
-- Both will be down by the time you read this; restart with `npm run dev:all`.
+- Backend on `:8787` via `npm --workspace server run start`; `mode=read-only`, connected to `redmine.avionica.com`.
+- Vite dev on `:5174`.
+- Restart both with `npm run dev:all` (or the two `npm --workspace server run start` / `npm run dev` commands separately).
 
 **Decision log (worth knowing):**
 - Scope #15 (`/api/redmine/users/:id/projects`) was **skipped** intentionally. The Hours page derives "the user's projects" from their assigned tasks, which is the correct semantic for that card (a memberships endpoint would surface 0-task projects as noise). If you need a real members endpoint for some other surface, it's a fresh call.

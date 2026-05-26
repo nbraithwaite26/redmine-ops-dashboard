@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Backend integration + recent CRs (2026-05-26)
+
+The app is now a **two-process app**: the Vite/React frontend plus a Hono
+backend in `server/` that brokers every Redmine call (the API key never
+reaches the browser). Full detail in
+[`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md) and
+[`docs/CHANGE_REQUESTS.md`](docs/CHANGE_REQUESTS.md).
+
+- **Backend proxy + writes** — Hono app with read-only/request-id/rate-limit
+  middleware, snake→camel adapters, admin auth (bcrypt + HMAC-signed session
+  cookie), JSONL audit history, and the full write surface (PATCH/POST/DELETE
+  for issues + time entries). Frontend wired to real mode via `/api/redmine/*`.
+- **§13 — Redis-backed session + rate-limit stores** behind `REDIS_URL`.
+  `server/src/store/redisClient.ts` lazily constructs an `ioredis` client;
+  `sessionStore` and the `rateLimit` middleware fall back to in-memory maps
+  when `REDIS_URL` is unset (zero behavior change for single-process dev).
+- **CR #15 — Projects category dashboard.** `/projects` rewritten as a
+  Home-style landing: hero + project-source picker + headline metrics +
+  category cards, drilling into `/projects/category/:slug`. "All Projects"
+  demoted to a sidebar sub-link of "Projects". New `lib/projectTree.ts`
+  (pure tree helpers) + `services/projectSource.ts` (named adapter isolating
+  the `**AV Engineering / AIRCRAFT ENGINEERING` default path — no API
+  contract). `getProjects()` now paginates all pages; three named categories
+  (Custom Engineering Services, STCs, Aircraft Engineering Continuous
+  Improvement) pinned first. `stripHtml()` added for Redmine HTML
+  descriptions. 40 new tests.
+- **CR #16 — Hours sidebar group + team Gantt.** "Hours" becomes an
+  expandable group → Time Tracking (`/time`) + Resource Management
+  (`/resources`). The Gantt route paginates and accepts a `project_id` filter
+  (subproject-inclusive). New `getTeamSchedule(projectId?)` adapter derives
+  users/issues/allocations from Gantt rows (works around the degraded
+  `/users.json`). A read-only team `ResourceTimeline` scoped to AIRCRAFT
+  ENGINEERING is embedded on `/hours`. Fixed a `NaN` CSS bug in
+  `ResourceTimeline` for allocations missing start/end dates.
+
+Validation at session end: frontend 47 files / 344 tests, server 14 files /
+73 tests, typecheck (front + server) + lint (2 pre-existing warnings) + build
+all clean.
+
 ### Refactor session (Phases 0 → H)
 
 A focused review-and-optimize pass after CR #14. Behavior-preserving;

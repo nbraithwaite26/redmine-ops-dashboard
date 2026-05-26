@@ -526,6 +526,193 @@ existing component. Backend scoping (Q1b) would add a small route change.
 
 ---
 
+## #18 — Pre-live QA: overflow, Hours/Time consolidation, Gantt rework, Team Hours views
+
+**Status:** 📝 Scaffold plan drafted, awaiting approval
+
+**Origin:** Pre-live QA pass. Eight must-fix/implement items + visual polish
++ two decision items. Frontend-scoped; reuse existing server/adapters, no
+new backend contracts.
+
+**Decisions locked (user, 2026-05-26):**
+- Q1 = keep `/time` (fixed: drop mock lookups), sidebar Time Tracking sub-link
+  still points to it.
+- Q2 = "expected" hours = Σ `estimatedHours` of the user's tasks.
+- Q3 = on Gantt user-select, filter the already-loaded (AIRCRAFT ENGINEERING-
+  scoped) gantt rows client-side; no new fetch.
+- Q4 = execute all 11 steps in order, commit per step.
+- **Sidebar restructure (replaces the old "decision items"):**
+  - **Tasks** becomes an expandable group → child **Past Due** (`/past-due`).
+  - **Projects** group gains **Project Builder** (`/project-builder`)
+    alongside **All Projects**.
+  - **Reports** (`/reports`) added as a top-level rail link.
+  - Admin stays conditional (signed-in only), as today.
+- Secrets: `.env.local` is gitignored + untracked (verified); rotation is
+  Nigel's call only if creds leaked outside the repo.
+
+### ⚠️ Foundational finding that shapes items 5/7/8
+
+`loadHoursData` (`src/lib/hoursAggregate.ts`) and the team Gantt build their
+user list from `getUsers()`, which **returns 0 users live** (the non-admin
+API key 403s `/users.json`). So today the live Hours page shows "No hours
+logged" for everyone and the Gantt had no rows until CR #16's `getTeamSchedule`
+worked around it. **Fix once, centrally:** derive the engineer list from
+**issue assignees** (the data we do have) instead of `getUsers()`. This single
+change is a prerequisite for items 5, 7, and 8 to work against live data.
+
+### Item-by-item plan
+
+**1. Global horizontal overflow / responsive TopBar** — `src/components/TopBar.tsx`
+- The header is a non-wrapping flex row of fixed-width blocks (`min-w-[260px]`
+  logo group, 4-button nav, `w-[440px]` search, a long action cluster with
+  Sync label + 2–3 pills + 4 icon buttons). Below ~1024px it overflows →
+  document-level horizontal scroll.
+- Plan: hide the `All/Favorites/History/Workspaces` nav below `lg`; constrain
+  search to `flex-1 min-w-0 max-w-[440px]` (no fixed width) and drop the
+  workspace chip + chevron on small screens; collapse the action cluster —
+  Sync becomes icon-only below `sm` (`hidden sm:inline` on its label),
+  Connected/Read-only/last-sync pills `hidden md:inline-flex`, Help/Notif/
+  Settings icons `hidden lg:inline-flex` (Settings already reachable via
+  sidebar). Add `overflow-x-clip` (or `overflow-x: hidden`) on the AppShell
+  root / `html` as a backstop so no stray child can force a horizontal
+  scrollbar.
+- Tests: extend/keep `TopBarLogo.test.tsx`; add a small assertion that the
+  nav is not rendered (or `hidden`) — keep light since these are CSS classes.
+
+**2. Projects STCs drilldown consistency** — mostly verification + small adds
+- Canonical label/slug is already `STCs`/`stcs` (mock id 220, real name
+  "STCs", `PINNED_CATEGORY_SLUGS` has `stcs`). No `stc` primary route exists.
+- Add: an alias so a stale `/projects/category/stc` resolves to `stcs` — in
+  `ProjectCategory.tsx`, if the slug doesn't match any category, try a
+  startsWith/normalized fallback, OR add an explicit `<Route>` redirect
+  `/projects/category/stc` → `/projects/category/stcs` in `App.tsx`.
+- Cleanup for consistency: update the synthetic `STC`/`stc` strings in
+  `ProjectCategoryCard.test.tsx`, `projectTree.test.ts`, and the mock child
+  project names ("STC — …") are fine (they're child projects, not the
+  category) — leave those. Confirm clicking STCs opens the populated list
+  (verified live in CR #16: 35 projects).
+
+**3. Strip HTML in All Projects cards** — `src/pages/AllProjects.tsx`
+- Import `stripHtml` (already in `lib/format.ts`); wrap the description
+  render. Also run the search filter against `stripHtml(p.description)` so
+  users don't match on tag text. Mirror `ProjectCategory.tsx`.
+
+**4. Hours vs Time Tracking duplication** — `src/pages/TimeTracking.tsx`, `App.tsx`
+- `TimeTracking` looks up project/issue **names from `mockProjects`/`mockIssues`**
+  even in real mode → wrong/"—" names live. Remove that dependency: use
+  `entry.projectName` (already on `TimeEntry`) and the issue id link; drop the
+  `mockIssues`/`mockProjects` imports.
+- Placement is a **decision** (see Q1): either redirect `/time → /hours` (and
+  repoint/remove the "Time Tracking" sidebar sub-link), or keep `/time` as the
+  entries log reachable from the sub-link. Recommended: keep `/time` but fixed,
+  since the sidebar sub-link now points there and the Hours landing is the
+  card/list summary — they serve different needs (summary vs. raw entry log).
+
+**5. Hours refresh after logging time** — `Hours.tsx`, `UserHoursSection.tsx`
+- `Hours` bumps `setReloadKey` but `UserHoursSection` only re-fetches on
+  `range.from/to`. Add a `refreshToken: number` prop to `UserHoursSection`,
+  include it in the effect deps, and pass the page's reload counter. On
+  `AddTimeModal.onCreated`, bump the token so both sections re-fetch.
+
+**6. Lint warnings** — `src/pages/MyTasks.tsx`, `src/pages/Tasks.tsx`
+- Wrap each page's `load` in `useCallback` (deps: `currentUser?.id` etc.) and
+  list it in the `useEffect` deps, clearing the `react-hooks/exhaustive-deps`
+  warning without changing behavior.
+
+**7. Gantt rework (select-user-first, hierarchical)** — `ResourceTimeline.tsx` (or a new `UserGantt`)
+- Default: **no bars**; show an empty state "Select an engineer to see their
+  schedule." Add an engineer `<select>` (options derived from assignees).
+- After selection, render **only that user's** work, grouped hierarchically:
+  a **project summary row** (bar spanning min(start)…max(due) across the
+  user's tasks in that project) with **task rows beneath** (each task's own
+  start→due bar). Collapsible per project.
+- This also fixes the ~700–1000-row render: we only ever render one user's
+  rows. Keep the existing zoom control.
+- Tests: new `UserGantt.test.tsx` (empty state, select → rows, project+task
+  grouping, bars only for selected user).
+
+**8. Team Hours card / list view modes** — `Hours.tsx` + components
+- Add a view selector (Card | List), styled like TimeTracking's group-by
+  `<select>`.
+- **Card view** = today's `UserHoursCard` extended: per user show name,
+  assigned project count, task count, hours spent, **hours expected
+  (Σ estimatedHours)**. Expand → embed the item-7 per-user hierarchical Gantt
+  (project → tasks, bars start→due, selected user only).
+- **List view** = table: user sections → project rows (name, spent, expected,
+  task count, due) → expandable to task rows (subject, status, start, due,
+  spent, expected, log-time action). Reuses `aggregateHours` output
+  (`UserHoursSummary` already has projects→tasks, spent, estimated, due).
+- All of this consumes the assignee-derived user list (foundational fix), so
+  it populates live.
+
+**Visual polish**
+- Projects: de-emphasize 0-project categories — render the pinned three +
+  any non-zero categories first, then collapse the 0-count ones under a
+  "More categories (N)" disclosure. (`Projects.tsx` + `projectSource` ordering.)
+- Category card: add spacing between name and count, ensure visible/accessible
+  text (`ProjectCategoryCard.tsx`).
+- Normalize category labels to exactly `Custom Engineering Services`, `STCs`,
+  `Aircraft Engineering Continuous Improvement` (already the real names; just
+  confirm display uses them verbatim, trailing space trimmed for display).
+- Drilldown loading state: `ProjectCategory.tsx` currently shows `…` as the
+  heading while loading — add a proper skeleton/`Loading…` state so the
+  ellipsis heading doesn't flash.
+- Mobile header: covered by item 1.
+
+**Sidebar restructure (decided)** — `src/components/Sidebar.tsx`
+- **Tasks** → expandable group with child **Past Due** (`/past-due`).
+- **Projects** group → add **Project Builder** (`/project-builder`) next to
+  **All Projects**.
+- Add top-level **Reports** (`/reports`) rail link.
+- Reuses the existing nested-group machinery; update `Sidebar.test.tsx`.
+
+### Files (summary)
+
+Edit: `TopBar.tsx`, `AppShell.tsx` (overflow backstop), `AllProjects.tsx`,
+`TimeTracking.tsx`, `App.tsx` (alias route + maybe `/time` redirect),
+`Hours.tsx`, `UserHoursSection.tsx`, `UserHoursCard.tsx`, `MyTasks.tsx`,
+`Tasks.tsx`, `ResourceTimeline.tsx`, `Projects.tsx`, `ProjectCategory.tsx`,
+`ProjectCategoryCard.tsx`, `lib/hoursAggregate.ts` (assignee-derived users),
+plus the affected tests.
+Create: `UserGantt.tsx` (+ test), Team Hours list components as needed.
+
+### Suggested commit sequence
+
+1. Foundational: derive Hours/team users from assignees (`hoursAggregate` +
+   team schedule) — makes Hours populate live.
+2. Item 6 lint fixes (tiny, isolated).
+3. Item 1 responsive TopBar + overflow backstop.
+4. Item 3 AllProjects stripHtml.
+5. Item 2 STCs alias + test consistency.
+6. Item 4 TimeTracking de-mock + placement decision.
+7. Item 5 Hours refresh token.
+8. Sidebar restructure (Tasks→Past Due, Projects→Project Builder, +Reports).
+9. Item 7 UserGantt (select-first hierarchical).
+10. Item 8 Team Hours card/list views (consumes 1 + 7).
+11. Visual polish (Projects 0-count grouping, card spacing, drilldown loading).
+12. Docs: flip CR #18 ✅, refresh IMPLEMENTATION_STATUS, CHANGELOG.
+
+### Open questions
+
+- **Q1 — `/time` placement.** Redirect `/time → /hours` (remove the Time
+  Tracking sub-link), or keep `/time` as the fixed raw-entries log reachable
+  from the sub-link? (Recommend: keep, fixed.)
+- **Q2 — "expected" hours definition.** Use Σ `estimatedHours` of the user's
+  tasks as "expected/estimated"? (No other field exists.) (Recommend: yes.)
+- **Q3 — Gantt scope when a user is selected.** Pull that user's issues via a
+  scoped fetch (`assigned_to_id`) or filter the already-loaded
+  AIRCRAFT ENGINEERING gantt rows client-side? (Recommend: filter the loaded
+  rows — no new fetch, and it's already scoped.)
+- **Q4 — Decision items** above (sidebar links; credential rotation).
+
+### Size
+
+Large. Items 7 + 8 are the bulk (new Gantt + two view modes); items 1–6 and
+polish are small-to-medium. Suggest landing in the commit order above so each
+piece is reviewable and the foundational data fix lands first.
+
+---
+
 ## #17 — Make the Dashboard tabs render real, distinct content
 
 **Status:** 📥 Collected (planned after CR #16)
