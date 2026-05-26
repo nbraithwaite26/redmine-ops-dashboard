@@ -3,13 +3,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
-// Top-level rail labels (All Projects is now a sub-link of Projects).
+// Top-level rail labels. Past Due is a sub-link of Tasks; All Projects +
+// Project Builder are sub-links of Projects; Time Tracking + Resource
+// Management are sub-links of Hours.
 const TOP_LEVEL_LABELS = [
   'Home',
   'Dashboard',
   'Tasks',
   'Calendar',
   'Hours',
+  'Reports',
   'Directory',
   'Projects',
   'Settings',
@@ -73,6 +76,20 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
     fireEvent.click(screen.getByTestId('sidebar-group-toggle-hours'));
     expect(screen.queryByRole('link', { name: 'Time Tracking' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Resource Management' })).not.toBeInTheDocument();
+  });
+
+  it('Tasks group exposes Past Due; Projects exposes Project Builder', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Past Due' })).toHaveAttribute('href', '/past-due');
+    expect(screen.getByRole('link', { name: 'Project Builder' })).toHaveAttribute(
+      'href',
+      '/project-builder',
+    );
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports');
   });
 
   it('toggling the Projects group hides/shows its sub-links', () => {

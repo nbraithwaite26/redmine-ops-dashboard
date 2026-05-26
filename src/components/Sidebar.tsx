@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -42,7 +43,13 @@ interface NavItem {
 const links: NavItem[] = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/tasks', label: 'Tasks', icon: ListTodo },
+  {
+    to: '/tasks',
+    label: 'Tasks',
+    icon: ListTodo,
+    end: true,
+    children: [{ to: '/past-due', label: 'Past Due' }],
+  },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   {
     to: '/hours',
@@ -54,13 +61,17 @@ const links: NavItem[] = [
       { to: '/resources', label: 'Resource Management' },
     ],
   },
+  { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/directory', label: 'Directory', icon: Library },
   {
     to: '/projects',
     label: 'Projects',
     icon: FolderKanban,
     end: true,
-    children: [{ to: '/projects/all', label: 'All Projects' }],
+    children: [
+      { to: '/projects/all', label: 'All Projects' },
+      { to: '/project-builder', label: 'Project Builder' },
+    ],
   },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
