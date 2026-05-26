@@ -4,6 +4,7 @@ import DashboardCard from '../components/DashboardCard';
 import ProjectCategoryCard from '../components/ProjectCategoryCard';
 import {
   DEFAULT_PROJECT_SOURCE,
+  PINNED_CATEGORY_SLUGS,
   getParentCandidates,
   resolveProjectSource,
 } from '../services/projectSource';
@@ -78,6 +79,7 @@ export default function Projects() {
   }, []);
 
   const candidates = useMemo(() => getParentCandidates(projects), [projects]);
+  const [showEmptyCategories, setShowEmptyCategories] = useState(false);
 
   // Resolve the source: explicit picker choice wins, else the default path.
   const source = useMemo(
@@ -87,6 +89,18 @@ export default function Projects() {
         selectedRootId !== undefined ? { rootId: selectedRootId } : {},
       ),
     [projects, selectedRootId],
+  );
+
+  // Keep the pinned categories + any with projects up top; tuck empty,
+  // unpinned categories behind a disclosure to de-clutter the landing.
+  const pinned = useMemo(() => new Set(PINNED_CATEGORY_SLUGS), []);
+  const mainCategories = useMemo(
+    () => source.categories.filter((c) => c.totalProjects > 0 || pinned.has(c.slug)),
+    [source.categories, pinned],
+  );
+  const emptyCategories = useMemo(
+    () => source.categories.filter((c) => c.totalProjects === 0 && !pinned.has(c.slug)),
+    [source.categories, pinned],
   );
 
   const metrics = useMemo(
@@ -156,10 +170,34 @@ export default function Projects() {
           <h2 className="text-lg font-semibold">Categories</h2>
         </div>
         {source.categories.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {source.categories.map((category) => (
-              <ProjectCategoryCard key={category.slug} category={category} />
-            ))}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {mainCategories.map((category) => (
+                <ProjectCategoryCard key={category.slug} category={category} />
+              ))}
+            </div>
+
+            {emptyCategories.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowEmptyCategories((v) => !v)}
+                  className="text-sm link"
+                  aria-expanded={showEmptyCategories}
+                  data-testid="toggle-empty-categories"
+                >
+                  {showEmptyCategories ? 'Hide' : 'Show'} {emptyCategories.length} empty{' '}
+                  {emptyCategories.length === 1 ? 'category' : 'categories'}
+                </button>
+                {showEmptyCategories && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-3 opacity-70">
+                    {emptyCategories.map((category) => (
+                      <ProjectCategoryCard key={category.slug} category={category} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="card p-8 text-center text-sm text-ink-muted">

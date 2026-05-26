@@ -72,7 +72,19 @@ export default function ProjectCategory() {
         </Link>
       </div>
 
-      {!loading && !category ? (
+      {loading ? (
+        <div className="space-y-4" data-testid="category-loading" aria-busy="true">
+          <div>
+            <div className="h-7 w-64 max-w-[60%] rounded bg-gray-200/70 animate-pulse" />
+            <div className="h-4 w-80 max-w-[80%] rounded bg-gray-200/50 animate-pulse mt-2" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card p-4 h-28 animate-pulse bg-gray-100/40" />
+            ))}
+          </div>
+        </div>
+      ) : !category ? (
         <div className="card p-8 text-center text-sm text-ink-muted">
           No category found for "{slug}".{' '}
           <Link to="/projects" className="link">Back to Projects</Link>
@@ -81,9 +93,9 @@ export default function ProjectCategory() {
         <>
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-2xl font-semibold">{category?.name ?? '…'}</h1>
+              <h1 className="text-2xl font-semibold">{category.name.trim()}</h1>
               <p className="text-sm text-ink-muted">
-                {category?.description
+                {category.description
                   ? stripHtml(category.description)
                   : 'Projects under this category.'}
               </p>

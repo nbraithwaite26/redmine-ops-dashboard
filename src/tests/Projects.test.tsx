@@ -65,9 +65,13 @@ describe('<Projects /> category dashboard', () => {
     const picker = screen.getByLabelText('Project source') as HTMLSelectElement;
     const stcOption = Array.from(picker.options).find((o) => o.textContent === 'STCs')!;
     fireEvent.change(picker, { target: { value: stcOption.value } });
+    // STC's children are leaf projects (0 sub-projects) and unpinned, so they
+    // land under the "empty categories" disclosure — reveal it first.
     await waitFor(() =>
-      expect(screen.getByTestId('category-card-stc-cabin-reconfiguration')).toBeInTheDocument(),
+      expect(screen.getByTestId('toggle-empty-categories')).toBeInTheDocument(),
     );
+    fireEvent.click(screen.getByTestId('toggle-empty-categories'));
+    expect(screen.getByTestId('category-card-stc-cabin-reconfiguration')).toBeInTheDocument();
     // The old top-level STC card is gone now that STC is the root.
     expect(screen.queryByTestId('category-card-custom-engineering-services')).toBeNull();
   });
