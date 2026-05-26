@@ -79,7 +79,7 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
           <div>
             <div className="text-xs text-ink-muted">Quick edit</div>
             <div id="quick-edit-title" className="font-semibold">
-              <a className="link" href={`#/my-tasks?id=${issue.id}`}>#{issue.id}</a> · {issue.subject}
+              <a className="link" href={`#/tasks?id=${issue.id}`}>#{issue.id}</a> · {issue.subject}
             </div>
           </div>
           <button onClick={onClose} aria-label="Close quick edit">

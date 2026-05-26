@@ -139,7 +139,7 @@ export default function TimeTracking() {
                     <td className="px-3 py-2">{e.user.name}</td>
                     <td className="px-3 py-2">{project?.name ?? '—'}</td>
                     <td className="px-3 py-2">
-                      {issue ? <a className="link" href={`#/my-tasks?id=${issue.id}`}>#{issue.id}</a> : '—'}
+                      {issue ? <a className="link" href={`#/tasks?id=${issue.id}`}>#{issue.id}</a> : '—'}
                     </td>
                     <td className="px-3 py-2">{e.activity}</td>
                     <td className="px-3 py-2 font-medium">{e.hours}h</td>

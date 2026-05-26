@@ -174,7 +174,7 @@ function GroupRows({
           >
             <td />
             <td className="pl-8 pr-2 py-1.5">
-              <a className="link" href={`#/my-tasks?id=${i.id}`}>#{i.id}</a>{' '}
+              <a className="link" href={`#/tasks?id=${i.id}`}>#{i.id}</a>{' '}
               <span className="text-ink-soft">{i.subject}</span>
               <div className="text-xs text-ink-muted">{i.projectName}</div>
             </td>

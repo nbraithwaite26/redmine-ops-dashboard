@@ -3,14 +3,11 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Tasks from '../pages/Tasks';
 import Calendar from '../pages/Calendar';
-import MyHours from '../pages/MyHours';
-import TeamHours from '../pages/TeamHours';
 import AllProjects from '../pages/AllProjects';
 
-// Hours landing tests live in Hours.test.tsx since the page was rewritten
-// from a two-card drill-in into the user-cards layout. MyHours / TeamHours
-// pages still render fine standalone; only the routing into them changed
-// (App.tsx now redirects /hours/me and /hours/team to /hours).
+// Hours coverage lives in Hours.test.tsx. The old MyHours / TeamHours
+// pages were deleted in Phase 3 cleanup — /hours/me and /hours/team
+// redirect to /hours via App.tsx.
 
 describe('<Tasks /> page', () => {
   it('renders both My tasks and Team tasks sections', async () => {
@@ -35,6 +32,33 @@ describe('<Tasks /> page', () => {
     await waitFor(() =>
       expect(screen.getByTestId('grouped-task-table')).toBeInTheDocument(),
     );
+  });
+
+  it('auto-opens the ticket drawer when ?id= deep-links a known issue', async () => {
+    // 1025 exists in the mock fixture (see src/data/mockData.ts).
+    render(
+      <MemoryRouter initialEntries={['/tasks?id=1025']}>
+        <Tasks />
+      </MemoryRouter>,
+    );
+
+    // Drawer renders the issue's "#id · subject" header.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/^#1025 · /),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('does not crash when ?id= points at an unknown issue', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tasks?id=999999']}>
+        <Tasks />
+      </MemoryRouter>,
+    );
+    // Page renders normally; no drawer opens.
+    await waitFor(() => expect(screen.getByText('Tasks')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
@@ -62,34 +86,6 @@ describe('<Calendar /> page', () => {
     fireEvent.click(screen.getByRole('button', { name: /next month/i }));
     const monthAfter = screen.getByTestId('calendar-grid').querySelector('header')?.textContent;
     expect(monthBefore).not.toEqual(monthAfter);
-  });
-});
-
-describe('<MyHours /> page', () => {
-  it('renders headline, gauge, and entries table', async () => {
-    render(
-      <MemoryRouter>
-        <MyHours />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('My hours this week')).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByText(/recent entries/i)).toBeInTheDocument(),
-    );
-  });
-});
-
-describe('<TeamHours /> page', () => {
-  it('renders headline + grouped table', async () => {
-    render(
-      <MemoryRouter>
-        <TeamHours />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('Team hours this week')).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByTestId('grouped-task-table')).toBeInTheDocument(),
-    );
   });
 });
 

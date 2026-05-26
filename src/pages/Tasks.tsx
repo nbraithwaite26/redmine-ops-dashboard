@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import CreateIssueModal from '../components/CreateIssueModal';
 import GroupedTaskTable from '../components/GroupedTaskTable';
@@ -25,6 +26,11 @@ export default function Tasks() {
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const { readOnly } = useReadOnly();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Track whether we've already honored the ?id= deep-link for this page
+  // visit. Without this, manually closing the drawer would immediately
+  // reopen it because the URL still carries the id.
+  const handledDeepLink = useRef(false);
 
   const load = async () => {
     const uid = currentUser?.id;
@@ -44,6 +50,24 @@ export default function Tasks() {
     if (userLoading) return;
     void load();
   }, [userLoading, currentUser?.id]);
+
+  // Honor ?id= once per visit: after the lists load, open that issue's
+  // drawer. Clears the param so subsequent navigation away + back doesn't
+  // re-trigger.
+  useEffect(() => {
+    if (handledDeepLink.current) return;
+    const raw = searchParams.get('id');
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id)) return;
+    const match = myIssues.find((i) => i.id === id) ?? teamIssues.find((i) => i.id === id);
+    if (!match) return;
+    setOpenIssue(match);
+    handledDeepLink.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('id');
+    setSearchParams(next, { replace: true });
+  }, [myIssues, teamIssues, searchParams, setSearchParams]);
 
   return (
     <div className="space-y-5">

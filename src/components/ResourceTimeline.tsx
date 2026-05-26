@@ -115,7 +115,7 @@ export default function ResourceTimeline({
                         className="grid grid-cols-[1fr_70px_70px_70px] text-sm border-t border-gray-100 bg-white"
                       >
                         <div className="pl-8 pr-3 py-2 truncate">
-                          <a className="link" href={`#/my-tasks?id=${i.id}`}>#{i.id}</a>{' '}
+                          <a className="link" href={`#/tasks?id=${i.id}`}>#{i.id}</a>{' '}
                           {i.subject}
                           <div className="text-xs text-ink-muted">{i.projectName}</div>
                         </div>

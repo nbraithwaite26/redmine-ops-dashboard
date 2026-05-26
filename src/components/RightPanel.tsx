@@ -109,7 +109,7 @@ export default function RightPanel() {
           <ChevronDown size={14} className="text-ink-muted" />
         </div>
         <ul className="text-sm space-y-1.5">
-          <li><a className="link inline-flex items-center gap-2" href="#/my-tasks"><ListPlus size={14} /> Create New Task</a></li>
+          <li><a className="link inline-flex items-center gap-2" href="#/tasks"><ListPlus size={14} /> Create New Task</a></li>
           <li><a className="link inline-flex items-center gap-2" href="#/project-builder"><FolderPlus size={14} /> Create New Project</a></li>
           <li><a className="link inline-flex items-center gap-2" href="#/time"><Timer size={14} /> Log Time</a></li>
           <li><a className="link inline-flex items-center gap-2" href="#/resources"><CalendarDays size={14} /> Open Resource Planner</a></li>
