@@ -19,6 +19,7 @@ interface Props {
 export default function UserHoursCard({ summary, readOnly, onLogTime }: Props) {
   const [open, setOpen] = useState(false);
   const userId = summary.user.id;
+  const panelId = `user-projects-list-${userId}`;
 
   return (
     <div
@@ -30,6 +31,7 @@ export default function UserHoursCard({ summary, readOnly, onLogTime }: Props) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-canvas/60"
         aria-expanded={open}
+        aria-controls={panelId}
         data-testid={`user-toggle-${userId}`}
       >
         <span className="text-ink-muted shrink-0">
@@ -63,7 +65,7 @@ export default function UserHoursCard({ summary, readOnly, onLogTime }: Props) {
       </button>
 
       {open && (
-        <div data-testid={`user-projects-list-${userId}`}>
+        <div id={panelId} role="region" aria-label={`${summary.user.name}'s projects`} data-testid={`user-projects-list-${userId}`}>
           {summary.projects.length === 0 ? (
             <div className="px-6 py-3 text-sm text-ink-muted border-t border-gray-100">
               No tasks assigned.

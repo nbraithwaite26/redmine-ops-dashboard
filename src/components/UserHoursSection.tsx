@@ -67,9 +67,16 @@ export default function UserHoursSection({
   );
 
   return (
-    <section data-testid={`hours-section-${range.offset}`} className="space-y-3">
+    <section
+      data-testid={`hours-section-${range.offset}`}
+      className="space-y-3"
+      aria-busy={loading}
+      aria-labelledby={`hours-section-title-${range.offset}`}
+    >
       <header>
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 id={`hours-section-title-${range.offset}`} className="text-lg font-semibold">
+          {title}
+        </h2>
         <p className="text-xs text-ink-muted">{range.label}</p>
       </header>
 
