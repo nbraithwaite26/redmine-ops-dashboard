@@ -16,6 +16,7 @@ import { formatHours } from '../lib/format';
 
 interface Props {
   onClose: () => void;
+  /** Fires after either a successful create OR a successful update. */
   onCreated: () => void;
   /** Pre-select the project dropdown to this id when the modal opens. */
   initialProjectId?: number;
@@ -25,6 +26,13 @@ interface Props {
    * supplied separately.
    */
   initialIssueId?: number;
+  /**
+   * When provided, the modal opens in EDIT mode: every field hydrates
+   * from this entry, the title flips to "Edit time entry", and Save
+   * calls update instead of create. The "New → In Progress" status
+   * bump only applies to creates and is skipped here.
+   */
+  editing?: TimeEntry;
 }
 
 /**
@@ -47,7 +55,10 @@ export default function AddTimeModal({
   onCreated,
   initialProjectId,
   initialIssueId,
+  editing,
 }: Props) {
+  const editMode = editing !== undefined;
+
   // ─── State ──────────────────────────────────────────────────────────────
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -55,14 +66,20 @@ export default function AddTimeModal({
   const [issuesForProject, setIssuesForProject] = useState<Issue[]>([]);
   const [pastEntries, setPastEntries] = useState<TimeEntry[]>([]);
 
-  const [projectId, setProjectId] = useState<number | null>(initialProjectId ?? null);
-  const [issueId, setIssueId] = useState<number | null>(initialIssueId ?? null);
-  const [activity, setActivity] = useState<string>('');
-  const [hours, setHours] = useState('');
-  const [spentOn, setSpentOn] = useState(new Date().toISOString().slice(0, 10));
-  const [comments, setComments] = useState('');
+  const [projectId, setProjectId] = useState<number | null>(
+    editing?.projectId ?? initialProjectId ?? null,
+  );
+  const [issueId, setIssueId] = useState<number | null>(
+    editing?.issueId ?? initialIssueId ?? null,
+  );
+  const [activity, setActivity] = useState<string>(editing?.activity ?? '');
+  const [hours, setHours] = useState(editing ? String(editing.hours) : '');
+  const [spentOn, setSpentOn] = useState(
+    editing?.spentOn ?? new Date().toISOString().slice(0, 10),
+  );
+  const [comments, setComments] = useState(editing?.comments ?? '');
 
-  const { saving, create } = useTimeEntryActions();
+  const { saving, create, save: updateEntry } = useTimeEntryActions();
   const issueActions = useIssueActions();
   const { readOnly } = useReadOnly();
 
@@ -141,24 +158,29 @@ export default function AddTimeModal({
 
   const save = async () => {
     if (projectId === null) return;
-    let createdEntry;
+    const payload = {
+      projectId,
+      issueId,
+      activity,
+      hours: Number(hours) || 0,
+      spentOn,
+      comments,
+    };
+
     try {
-      createdEntry = await create({
-        projectId,
-        issueId,
-        activity,
-        hours: Number(hours) || 0,
-        spentOn,
-        comments,
-      });
+      if (editMode) {
+        await updateEntry(editing!.id, payload);
+      } else {
+        await create(payload);
+      }
     } catch {
       // Toast already surfaced; keep the modal open for retry.
       return;
     }
 
-    // Status-bump: if the selected task is still 'New', move it to
-    // 'In Progress'. Best-effort — a failure here doesn't undo the log.
-    if (issueId !== null) {
+    // Status-bump only on CREATE. Edits shouldn't auto-bump an issue's
+    // status — the user already knows the state of the world.
+    if (!editMode && issueId !== null) {
       try {
         const issue = await getIssueById(issueId);
         if (issue && issue.status === 'New') {
@@ -171,7 +193,6 @@ export default function AddTimeModal({
 
     onCreated();
     onClose();
-    void createdEntry; // referenced for future return-value uses
   };
 
   const dialogRef = useDialogA11y({ open: true, onClose });
@@ -200,7 +221,7 @@ export default function AddTimeModal({
       >
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div id="add-time-title" className="font-semibold">
-            Add time entry
+            {editMode ? 'Edit time entry' : 'Add time entry'}
           </div>
           <button onClick={onClose} aria-label="Close add time">
             <X size={18} />

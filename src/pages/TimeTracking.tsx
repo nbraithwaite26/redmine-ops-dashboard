@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import AddTimeModal from '../components/AddTimeModal';
 import DashboardCard from '../components/DashboardCard';
 import {
@@ -43,6 +43,7 @@ export default function TimeTracking() {
   const [range, setRange] = useState<Range>('Weekly');
   const [groupBy, setGroupBy] = useState<GroupBy>('None');
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<TimeEntry | null>(null);
   const { readOnly } = useReadOnly();
   const { remove: removeEntry, saving: removing } = useTimeEntryActions();
 
@@ -144,22 +145,34 @@ export default function TimeTracking() {
                     <td className="px-3 py-2 font-medium">{e.hours}h</td>
                     <td className="px-3 py-2 text-ink-soft truncate max-w-[260px]">{e.comments}</td>
                     <td className="px-3 py-2">
-                      <button
-                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label={`Delete time entry ${e.id}`}
-                        disabled={removing || readOnly}
-                        title={readOnly ? 'Read-only mode — writes disabled' : undefined}
-                        onClick={async () => {
-                          try {
-                            await removeEntry(e.id);
-                            await reload();
-                          } catch {
-                            // Toast already surfaced.
-                          }
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          aria-label={`Edit time entry ${e.id}`}
+                          disabled={removing || readOnly}
+                          title={readOnly ? 'Read-only mode — writes disabled' : 'Edit'}
+                          onClick={() => setEditing(e)}
+                          data-testid={`edit-time-entry-${e.id}`}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          aria-label={`Delete time entry ${e.id}`}
+                          disabled={removing || readOnly}
+                          title={readOnly ? 'Read-only mode — writes disabled' : 'Delete'}
+                          onClick={async () => {
+                            try {
+                              await removeEntry(e.id);
+                              await reload();
+                            } catch {
+                              // Toast already surfaced.
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -181,6 +194,17 @@ export default function TimeTracking() {
           onClose={() => setAddOpen(false)}
           onCreated={async () => {
             setAddOpen(false);
+            await reload();
+          }}
+        />
+      )}
+
+      {editing && (
+        <AddTimeModal
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onCreated={async () => {
+            setEditing(null);
             await reload();
           }}
         />

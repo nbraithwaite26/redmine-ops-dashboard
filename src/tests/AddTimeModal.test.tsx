@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AddTimeModal from '../components/AddTimeModal';
 import { clearToasts, getToasts } from '../lib/toast';
-import { getIssueById } from '../services/redmineApi';
+import { getIssueById, getTimeEntries } from '../services/redmineApi';
 
 /**
  * Tests the AddTimeModal contract from plan §1:
@@ -101,5 +101,46 @@ describe('<AddTimeModal />', () => {
     // Verify the issue's status actually flipped in the mock store.
     const after = await getIssueById(NEW_TASK_ID);
     expect(after!.status).toBe('In Progress');
+  });
+
+  it('opens in edit mode when given `editing`: hydrates fields, updates on save, skips status-bump', async () => {
+    const allEntries = await getTimeEntries();
+    expect(allEntries.length).toBeGreaterThan(0);
+    const target = allEntries[0]!;
+
+    renderModal({ editing: target });
+
+    // Title swaps to "Edit time entry"
+    expect(await screen.findByText(/edit time entry/i)).toBeInTheDocument();
+
+    // Fields hydrate from the entry.
+    const hoursInput = screen.getByTestId('add-time-hours') as HTMLInputElement;
+    const dateInput = screen.getByTestId('add-time-date') as HTMLInputElement;
+    const commentInput = screen.getByTestId('add-time-comment') as HTMLInputElement;
+    expect(hoursInput.value).toBe(String(target.hours));
+    expect(dateInput.value).toBe(target.spentOn);
+    expect(commentInput.value).toBe(target.comments);
+
+    // Bump the hours and save.
+    fireEvent.change(hoursInput, { target: { value: String(target.hours + 0.25) } });
+    fireEvent.click(screen.getByTestId('add-time-save'));
+
+    // Success toast — message includes the entry id.
+    await waitFor(() => {
+      const toasts = getToasts();
+      expect(
+        toasts.some(
+          (t) => t.kind === 'success' && t.message.includes(`#${target.id}`),
+        ),
+      ).toBe(true);
+    });
+
+    // No status-bump on edits, even if the linked issue was 'New'.
+    // (The bump toast carries an issue id, not an entry id — and we just
+    // asserted no toast with the issue id was emitted in this branch
+    // because the create branch is the only one that fires it. Spot
+    // check: nothing in toasts mentions 'In Progress'.)
+    const toasts = getToasts();
+    expect(toasts.every((t) => !/in progress/i.test(t.message))).toBe(true);
   });
 });
