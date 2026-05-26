@@ -528,7 +528,39 @@ existing component. Backend scoping (Q1b) would add a small route change.
 
 ## #18 — Pre-live QA: overflow, Hours/Time consolidation, Gantt rework, Team Hours views
 
-**Status:** 📝 Scaffold plan drafted, awaiting approval
+**Status:** ✅ Shipped
+
+**Shipped notes (2026-05-26):** Landed across 12 commits in the planned
+order. Highlights + things found along the way:
+- **Foundational:** `deriveUsers` builds the Hours/team roster from issue
+  assignees + entry authors (live `/users.json` 403s → 0 users), which also
+  fixed the previously-empty live Hours page.
+- **Overflow:** responsive TopBar (nav/pills/icons collapse by breakpoint,
+  search unfixed) + `body { overflow-x: hidden }` backstop; PastDue filter
+  header wraps; ProjectBuilder task grid scrolls in-card. 0 doc overflow on
+  all 14 routes at 390/1280/1920.
+- **STCs:** already canonical; added `/projects/category/stc → stcs` alias.
+- **AllProjects:** `stripHtml` on description + search.
+- **TimeTracking:** dropped mock project/issue lookups (uses `entry.projectName`
+  + `issueId`); `/time` kept as the raw entries log.
+- **Hours refresh:** `refreshToken` prop re-fetches both week sections + team
+  after logging time.
+- **Lint:** `useCallback` load in MyTasks/Tasks — lint now 0 warnings.
+- **Sidebar:** Tasks→Past Due, Projects→(All Projects + Project Builder),
+  added Reports rail link.
+- **Gantt rework:** new `UserGantt` / `UserGanttBars` — select-first, empty by
+  default, Project→Task bars (start→due), only the focused user; filters the
+  already-loaded scoped rows (no 700-row render).
+- **Team Hours:** new `TeamHours` with Card | List toggle. Card = per-engineer
+  (projects/tasks/spent/expected) → expand to per-user Gantt. List =
+  engineer→project→task table with log-time. Pure `aggregateTeamFromIssues`.
+- **Polish:** Projects tucks empty categories behind a disclosure (20→6 cards),
+  card spacing + trimmed names, drilldown skeleton loading state.
+
+Validation: typecheck (front+server) pass, lint 0 warnings, frontend 49
+files / 357 tests, server 14 files / 73 tests, build OK. Browser-verified at
+390/1280/1920 — no doc overflow, no console errors on fresh mount, STCs
+populated (35), AllProjects HTML stripped, Team Hours card/list working.
 
 **Origin:** Pre-live QA pass. Eight must-fix/implement items + visual polish
 + two decision items. Frontend-scoped; reuse existing server/adapters, no

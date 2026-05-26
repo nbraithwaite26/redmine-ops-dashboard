@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed / Changed — CR #18: pre-live QA batch (2026-05-26)
+
+A 12-commit pass against pre-live QA findings. See
+[`docs/CHANGE_REQUESTS.md`](docs/CHANGE_REQUESTS.md) #18 for the full log.
+
+- **Hours roster derived from assignees** — `loadHoursData` no longer relies
+  on `/users.json` (403s for the non-admin key), so the live Hours page
+  populates. New `deriveUsers` + `aggregateTeamFromIssues` helpers.
+- **No more horizontal overflow** — responsive TopBar (nav/pills/icons
+  collapse by breakpoint, search unfixed) + `body { overflow-x: hidden }`;
+  PastDue filter header wraps; ProjectBuilder grid scrolls in-card. Verified
+  0 document overflow at 390 / 1280 / 1920 on all routes.
+- **Gantt rework** — `UserGantt` / `UserGanttBars`: empty until an engineer
+  is selected, then Project→Task bars (start→due) for that user only.
+- **Team Hours views** — `TeamHours` Card | List toggle. Card = per-engineer
+  summary → expand to per-user Gantt; List = engineer→project→task table with
+  log-time.
+- **Sidebar** — Tasks→Past Due, Projects→(All Projects + Project Builder),
+  new Reports rail link.
+- Misc: All Projects descriptions/search use `stripHtml`; TimeTracking uses
+  live `entry.projectName`/`issueId` (no mock lookups); `/time` kept as the
+  entries log; Hours refreshes after logging time; `/projects/category/stc`
+  aliases to `stcs`; empty project categories tucked behind a disclosure;
+  drilldown skeleton loading; lint warnings cleared (0).
+
 ### Added — Backend integration + recent CRs (2026-05-26)
 
 The app is now a **two-process app**: the Vite/React frontend plus a Hono

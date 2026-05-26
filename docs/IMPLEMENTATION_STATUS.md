@@ -2,23 +2,27 @@
 
 Snapshot of the work executed against [`docs/INTEGRATION_PLAN.md`](./INTEGRATION_PLAN.md). Section numbers below match the plan's §9 implementation order.
 
-Last updated: 2026-05-26 (CR #16 shipped — Hours sidebar group + team Gantt; pushed to origin/main).
+Last updated: 2026-05-26 (CR #18 shipped — pre-live QA batch: overflow, Hours/Time, Gantt rework, Team Hours views).
 
 ## Quick handoff for the next session
 
-**Repo state:** clean working tree on `main`, in sync with `origin/main` (all pushed). Latest commits (top = newest):
+**Repo state:** clean working tree on `main`. CR #18's 12 commits are **local, not yet pushed** (CR #16 and earlier are on `origin/main`). Latest commits (top = newest):
 
 ```
-8397afe  CR #16: Hours sidebar group (Time Tracking + Resource Mgmt) + team Gantt
-1a74beb  CR #15: Projects category dashboard + All Projects as a Projects sub-link
-e66f2c0  Section 13: Redis-backed session + rate-limit stores behind REDIS_URL
-2cd4ea5  IMPLEMENTATION_STATUS handoff: Phase 5 polish complete + next-session pointers
-6528ee5  A11y polish: aria-controls + region landmarks on Hours accordion
+200a2f3  CR #18 (11/12): visual polish — categories, card spacing, drilldown loading
+3e7726b  CR #18 (10/12): Team Hours card + list view modes
+6e49af5  CR #18 (9/12): select-first hierarchical UserGantt
+346cdbe  CR #18 (8/12): sidebar restructure (Tasks/Projects groups + Reports)
+… (1/12 → 7/12 above) …
+18df5af  docs: changelog + handoff refresh; record CR #17 and CR #18 plan
+8397afe  CR #16: Hours sidebar group + team Gantt   ← last pushed to origin/main
 ```
+(Step 12/12 = this doc refresh.)
 
 **What's left to do.**
 
-- **CR #17 — make the Dashboard tabs real** (📥 collected, not yet planned). The `Your Team's Work` / `Project Health` / `Resource Planning` tabs in `Dashboard.tsx` are cosmetic — `setTab` updates the highlight but nothing reads `tab`, so all four render the same metrics + "My Tasks" table. See CR #17 in `docs/CHANGE_REQUESTS.md`.
+- **Push CR #18** — 12 + this doc commit are local-only; push when ready (direct-to-main needs explicit confirmation per the auto-mode classifier).
+- **CR #17 — make the Dashboard tabs real** (📥 collected). The `Your Team's Work` / `Project Health` / `Resource Planning` tabs in `Dashboard.tsx` are cosmetic — `setTab` updates the highlight but nothing reads `tab`. See CR #17 in `docs/CHANGE_REQUESTS.md`.
 - **Section 15 — Final validation against live Redmine.** Requires flipping `REDMINE_READ_ONLY=false` in `.env.local` and restarting the backend. Then smoke every mutation path. Risk: real writes against the connected Redmine instance.
 
 Everything else from plan §9 and the CR backlog is shipped: writes, Hours redesign, list-optimistic refactor, custom-fields write-through, cleanup, responsive sweep, a11y, Redis stores (§13), the Projects category dashboard (CR #15), and the Hours group + team Gantt (CR #16).
@@ -65,7 +69,8 @@ Everything else from plan §9 and the CR backlog is shipped: writes, Hours redes
 | 15 — Final validation | §9 Step 15 | ⏳ not started | Flip `REDMINE_READ_ONLY=false` in `.env.local`, restart backend, smoke every mutation path against live Redmine. Risk: real writes to your Redmine instance — only run when you're ready. |
 | CR #15 — Projects category dashboard | docs/CHANGE_REQUESTS.md | ✅ done | Projects page rewritten as a Home-style category dashboard (hero + source-swapper picker + headline metrics + category cards); "All Projects" demoted to a Projects sidebar sub-link; new `/projects/category/:slug` drill-down. New `lib/projectTree.ts` + `services/projectSource.ts` (named adapter isolating the `**AV Engineering / AIRCRAFT ENGINEERING` default path, no API contract). `getProjects()` now paginates all pages. Three named categories pinned first. `stripHtml()` added for Redmine HTML descriptions. 40 new tests across 5 files. Verified live at :5174. |
 | CR #16 — Hours group + team Gantt | docs/CHANGE_REQUESTS.md | ✅ done | "Hours" sidebar item becomes an expandable group (Time Tracking + Resource Management sub-links). `gantt.ts` paginates + accepts `project_id` (subproject-inclusive). New `getTeamSchedule(projectId?)` adapter derives users/issues/allocations from Gantt rows (works around degraded `/users.json`). Read-only team `ResourceTimeline` embedded on `/hours`, scoped to AIRCRAFT ENGINEERING. Fixed a `NaN` style bug in `ResourceTimeline` for dateless allocations. New server gantt test + Sidebar/Hours test updates. Verified live (28 user rows, bars populated). |
-| CR #17 — Make Dashboard tabs real | docs/CHANGE_REQUESTS.md | 📥 collected | "Your Team's Work" / "Project Health" / "Resource Planning" tabs in `Dashboard.tsx` are cosmetic (tab state never read). Planned after CR #16. |
+| CR #17 — Make Dashboard tabs real | docs/CHANGE_REQUESTS.md | 📥 collected | "Your Team's Work" / "Project Health" / "Resource Planning" tabs in `Dashboard.tsx` are cosmetic (tab state never read). Planned after CR #18. |
+| CR #18 — Pre-live QA batch | docs/CHANGE_REQUESTS.md | ✅ done | 12 commits: derive Hours roster from assignees (fixes empty live Hours); responsive TopBar + overflow backstop (0 overflow at 390/1280/1920); AllProjects stripHtml; STCs `/category/stc`→`stcs` alias; TimeTracking de-mock; Hours refresh token; lint 0 warnings; sidebar Tasks→Past Due / Projects→Project Builder / +Reports; new `UserGantt`/`UserGanttBars` (select-first, hierarchical); new `TeamHours` Card/List views (`aggregateTeamFromIssues`); category 0-count disclosure + card/loading polish. Frontend 49/357, server 14/73, build OK. |
 
 ## File map (new since the plan started)
 
