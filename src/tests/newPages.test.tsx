@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import Tasks from '../pages/Tasks';
 import Calendar from '../pages/Calendar';
-import Hours from '../pages/Hours';
 import MyHours from '../pages/MyHours';
 import TeamHours from '../pages/TeamHours';
 import AllProjects from '../pages/AllProjects';
 
-function LocationProbe() {
-  const loc = useLocation();
-  return <div data-testid="location">{loc.pathname}</div>;
-}
+// Hours landing tests live in Hours.test.tsx since the page was rewritten
+// from a two-card drill-in into the user-cards layout. MyHours / TeamHours
+// pages still render fine standalone; only the routing into them changed
+// (App.tsx now redirects /hours/me and /hours/team to /hours).
 
 describe('<Tasks /> page', () => {
   it('renders both My tasks and Team tasks sections', async () => {
@@ -63,56 +62,6 @@ describe('<Calendar /> page', () => {
     fireEvent.click(screen.getByRole('button', { name: /next month/i }));
     const monthAfter = screen.getByTestId('calendar-grid').querySelector('header')?.textContent;
     expect(monthBefore).not.toEqual(monthAfter);
-  });
-});
-
-describe('<Hours /> landing page', () => {
-  it('renders both drill-in cards', async () => {
-    render(
-      <MemoryRouter>
-        <Hours />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getByText(/my hours this week/i)).toBeInTheDocument(),
-    );
-    expect(screen.getByText(/team hours this week/i)).toBeInTheDocument();
-  });
-
-  it('clicking the personal card navigates to /hours/me', async () => {
-    render(
-      <MemoryRouter initialEntries={['/hours']}>
-        <Routes>
-          <Route path="/hours" element={<Hours />} />
-          <Route path="/hours/me" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    const card = await waitFor(() =>
-      screen.getByRole('button', { name: /my hours this week/i }),
-    );
-    fireEvent.click(card);
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/hours/me'),
-    );
-  });
-
-  it('clicking the team card navigates to /hours/team', async () => {
-    render(
-      <MemoryRouter initialEntries={['/hours']}>
-        <Routes>
-          <Route path="/hours" element={<Hours />} />
-          <Route path="/hours/team" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    const card = await waitFor(() =>
-      screen.getByRole('button', { name: /team hours this week/i }),
-    );
-    fireEvent.click(card);
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/hours/team'),
-    );
   });
 });
 

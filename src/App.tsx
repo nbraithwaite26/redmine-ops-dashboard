@@ -16,8 +16,8 @@ import AllProjects from './pages/AllProjects';
 import Reports from './pages/Reports';
 import Calendar from './pages/Calendar';
 import Hours from './pages/Hours';
-import MyHours from './pages/MyHours';
-import TeamHours from './pages/TeamHours';
+// MyHours / TeamHours are orphaned by the Hours redesign; legacy URLs
+// redirect to /hours below. Files stay (deletion in Phase 4 cleanup).
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 
@@ -42,10 +42,10 @@ export default function App() {
 
         <Route path="/calendar" element={<Calendar />} />
 
-        {/* Hours — landing + two leaves. */}
+        {/* Hours — single page; legacy leaves redirect. */}
         <Route path="/hours" element={<Hours />} />
-        <Route path="/hours/me" element={<MyHours />} />
-        <Route path="/hours/team" element={<TeamHours />} />
+        <Route path="/hours/me" element={<Navigate to="/hours" replace />} />
+        <Route path="/hours/team" element={<Navigate to="/hours" replace />} />
 
         <Route path="/past-due" element={<PastDue />} />
 
