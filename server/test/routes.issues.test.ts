@@ -123,6 +123,64 @@ describe('PATCH /issues/:id', () => {
     expect(res.status).toBe(400);
   });
 
+  it('forwards customFields as snake_case custom_fields with string-coerced values', async () => {
+    const calls: Array<{ url: string; method: string; body: string | undefined }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      calls.push({ url, method, body });
+      if (method === 'PUT' && url.includes('/issues/1001.json')) {
+        return new Response(null, { status: 204 });
+      }
+      if (method === 'GET' && url.includes('/issues/1001.json')) {
+        return new Response(JSON.stringify(issueFixture), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await makeWritableApp().request('/issues/1001', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        customFields: [
+          { id: 1, value: 'Updated Anonymized text' },
+          { id: 7, value: 42 },
+          { id: 8, value: true },
+          { id: 9, value: false },
+          { id: 10, value: null },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const putCall = calls.find((c) => c.method === 'PUT')!;
+    const sent = JSON.parse(putCall.body!) as { issue: Record<string, unknown> };
+    const cf = sent.issue.custom_fields as Array<{ id: number; value: string }>;
+    expect(cf).toEqual([
+      { id: 1, value: 'Updated Anonymized text' },
+      { id: 7, value: '42' },
+      { id: 8, value: '1' },
+      { id: 9, value: '0' },
+      { id: 10, value: '' }, // null clears the field
+    ]);
+    // camelCase key must not leak through.
+    expect(sent.issue.customFields).toBeUndefined();
+  });
+
+  it('rejects customFields with malformed entries (zod allowlist)', async () => {
+    const res = await makeWritableApp().request('/issues/1001', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        customFields: [{ id: 'not-a-number', value: 'x' }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('BAD_REQUEST');
+  });
+
   it('PUTs the camel→snake mapped body to Redmine and returns the refetched issue', async () => {
     const calls: Array<{ url: string; method: string; body: string | undefined }> = [];
     globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

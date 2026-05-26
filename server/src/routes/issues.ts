@@ -71,6 +71,11 @@ issues.get('/:id{[0-9]+}', async (c) => {
 // them to IDs by looking up the relevant enumeration. assignedTo is sent
 // as a numeric user id (or `null` to unassign).
 
+const customFieldEntrySchema = z.object({
+  id: z.number().int().positive(),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+});
+
 const patchBodySchema = z
   .object({
     subject: z.string().min(1).max(255).optional(),
@@ -85,6 +90,7 @@ const patchBodySchema = z
     doneRatio: z.number().int().min(0).max(100).optional(),
     parentIssueId: z.number().int().positive().nullable().optional(),
     notes: z.string().max(65_535).optional(),
+    customFields: z.array(customFieldEntrySchema).max(64).optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, {
@@ -132,6 +138,21 @@ async function camelPatchToRedmineBody(patch: PatchBody): Promise<Record<string,
   if (patch.doneRatio !== undefined) body.done_ratio = patch.doneRatio;
   if (patch.parentIssueId !== undefined) body.parent_issue_id = patch.parentIssueId;
   if (patch.notes !== undefined) body.notes = patch.notes;
+  if (patch.customFields !== undefined) {
+    // Redmine expects `value` as a string on the wire even for numeric
+    // / boolean fields (it parses on its side). Null clears the field.
+    body.custom_fields = patch.customFields.map((cf) => ({
+      id: cf.id,
+      value:
+        cf.value === null
+          ? ''
+          : typeof cf.value === 'boolean'
+            ? cf.value
+              ? '1'
+              : '0'
+            : String(cf.value),
+    }));
+  }
 
   if (patch.status !== undefined) {
     const map = await loadEnum('/issue_statuses.json', 'issue_statuses');

@@ -298,7 +298,11 @@ export default function TicketDrawer({ issue, onClose, onSaved, onDeleted, onQui
           </Section>
 
           <Section title="Custom fields">
-            <CustomFields fields={draft.customFields} />
+            <CustomFields
+              fields={draft.customFields}
+              readOnly={readOnly}
+              onChange={(next) => setDraft({ ...draft, customFields: next })}
+            />
           </Section>
 
           <Section title="Attachments">
@@ -462,31 +466,96 @@ function F({
 const MOCK_MODE =
   (import.meta.env.VITE_MOCK_MODE ?? 'true').toString().toLowerCase() !== 'false';
 
-function CustomFields({ fields }: { fields: CustomField[] }) {
-  if (fields.length > 0) {
+interface CustomFieldsProps {
+  fields: CustomField[];
+  readOnly: boolean;
+  onChange: (next: CustomField[]) => void;
+}
+
+function CustomFields({ fields, readOnly, onChange }: CustomFieldsProps) {
+  if (fields.length === 0) {
     return (
-      <dl
-        className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm"
-        data-testid="custom-fields-list"
+      <div
+        className="text-xs text-ink-muted"
+        data-testid="custom-fields-empty"
       >
-        {fields.map((f) => (
-          <div key={f.id} className="flex flex-col">
-            <dt className="text-xs text-ink-muted">{f.name}</dt>
-            <dd className="text-ink">{formatCustomFieldValue(f.value)}</dd>
-          </div>
-        ))}
-      </dl>
+        {MOCK_MODE
+          ? 'No custom fields configured for this tracker.'
+          : 'No custom fields set on this issue. The catalog is sampled from recent issues — /custom_fields.json is admin-only and may not surface every field defined in Redmine.'}
+      </div>
+    );
+  }
+
+  const update = (id: number, value: CustomField['value']) => {
+    onChange(fields.map((f) => (f.id === id ? { ...f, value } : f)));
+  };
+
+  return (
+    <dl
+      className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm"
+      data-testid="custom-fields-list"
+    >
+      {fields.map((f) => (
+        <div key={f.id} className="flex flex-col">
+          <dt className="text-xs text-ink-muted">{f.name}</dt>
+          <dd className="mt-0.5">
+            {readOnly ? (
+              <span className="text-ink">{formatCustomFieldValue(f.value)}</span>
+            ) : (
+              <CustomFieldInput
+                value={f.value}
+                onChange={(next) => update(f.id, next)}
+                testId={`custom-field-${f.id}`}
+              />
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function CustomFieldInput({
+  value,
+  onChange,
+  testId,
+}: {
+  value: CustomField['value'];
+  onChange: (next: CustomField['value']) => void;
+  testId: string;
+}) {
+  if (typeof value === 'boolean') {
+    return (
+      <label className="inline-flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={value}
+          onChange={(e) => onChange(e.target.checked)}
+          data-testid={testId}
+        />
+        <span className="text-ink-muted">{value ? 'Yes' : 'No'}</span>
+      </label>
+    );
+  }
+  if (typeof value === 'number') {
+    return (
+      <input
+        type="number"
+        className="input"
+        value={value}
+        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        data-testid={testId}
+      />
     );
   }
   return (
-    <div
-      className="text-xs text-ink-muted"
-      data-testid="custom-fields-empty"
-    >
-      {MOCK_MODE
-        ? 'No custom fields configured for this tracker.'
-        : 'No custom fields set on this issue. The catalog is sampled from recent issues — /custom_fields.json is admin-only and may not surface every field defined in Redmine.'}
-    </div>
+    <input
+      type="text"
+      className="input"
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      data-testid={testId}
+    />
   );
 }
 

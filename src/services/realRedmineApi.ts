@@ -366,9 +366,7 @@ export const realRedmineApi: RedmineApi = {
     // Build a curated patch body matching the backend's PATCH allowlist.
     // Unknown fields are silently dropped here so callers (e.g. dialog
     // Save handlers that pass the entire Issue draft) don't need to know
-    // which fields are editable. Anything we drop is either:
-    //   - server-derived (id, projectId, projectName, createdOn, etc.)
-    //   - not yet supported by the backend (relations, customFields)
+    // which fields are editable.
     const body: Record<string, unknown> = {};
     if (patch.subject !== undefined) body.subject = patch.subject;
     if (patch.description !== undefined) body.description = patch.description;
@@ -383,8 +381,13 @@ export const realRedmineApi: RedmineApi = {
     if (patch.estimatedHours !== undefined) body.estimatedHours = patch.estimatedHours;
     if (patch.doneRatio !== undefined) body.doneRatio = patch.doneRatio;
     if ('parentIssueId' in patch) body.parentIssueId = patch.parentIssueId;
-    if (patch.nextAction !== undefined && patch.nextAction !== null) {
-      // nextAction is a custom field; not yet writable. Skip silently.
+    if (patch.customFields !== undefined) {
+      // The backend accepts { id, value } pairs; the wire-shape mapping
+      // to Redmine's snake_case + string-coerced values happens server-side.
+      body.customFields = patch.customFields.map((cf) => ({
+        id: cf.id,
+        value: cf.value,
+      }));
     }
 
     const updated = await httpJson<Issue>('PATCH', `/issues/${id}`, body);
