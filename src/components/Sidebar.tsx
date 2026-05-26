@@ -44,7 +44,16 @@ const links: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Tasks', icon: ListTodo },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { to: '/hours', label: 'Hours', icon: Timer },
+  {
+    to: '/hours',
+    label: 'Hours',
+    icon: Timer,
+    end: true,
+    children: [
+      { to: '/time', label: 'Time Tracking' },
+      { to: '/resources', label: 'Resource Management' },
+    ],
+  },
   { to: '/directory', label: 'Directory', icon: Library },
   {
     to: '/projects',

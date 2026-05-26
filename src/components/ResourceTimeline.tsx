@@ -172,6 +172,10 @@ export default function ResourceTimeline({
                     {userAllocs.map((a) => {
                       const startIdx = dayIndex(new Date(a.startDate));
                       const endIdx = dayIndex(new Date(a.endDate));
+                      // Skip allocations without parseable start/end dates
+                      // (many real issues lack both) — otherwise left/width
+                      // compute to NaN and React warns on the style.
+                      if (Number.isNaN(startIdx) || Number.isNaN(endIdx)) return null;
                       const left = Math.max(0, startIdx) * 36 + 2;
                       const width = Math.max(0, endIdx - Math.max(0, startIdx) + 1) * 36 - 4;
                       if (width <= 0) return null;

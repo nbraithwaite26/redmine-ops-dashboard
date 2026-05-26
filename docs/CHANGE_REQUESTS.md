@@ -395,6 +395,167 @@ near-black canvas with grey contrasts; brand yellow stays bright in both.
 
 ---
 
+## #16 — Hours becomes a sidebar group (Time Tracking + Resource Management) + team Gantt
+
+**Status:** ✅ Shipped
+
+**Shipped notes (2026-05-26):**
+- Sidebar: "Hours" is now an expandable group → Time Tracking (`/time`) +
+  Resource Management (`/resources`), reusing the CR #15 nested machinery.
+- Backend: `gantt.ts` paginates all matching issues and accepts `project_id`
+  (Redmine includes subprojects). Scoped to AIRCRAFT ENGINEERING the endpoint
+  returns ~703 rows (vs. 100 instance-wide before), 366 with start+due dates.
+- Frontend: new `getTeamSchedule(projectId?)` adapter derives **users +
+  issues + allocations from the Gantt rows themselves** — necessary because
+  live `/users.json` 403s for the non-admin key (returns 0 users), which
+  would otherwise leave `ResourceTimeline` (it renders one row per user) with
+  no rows. Hours embeds a read-only team `ResourceTimeline` scoped to the
+  AIRCRAFT ENGINEERING root. Verified live: 28 user rows, bars populated.
+- Bug fixed (surfaced by live data): `ResourceTimeline` produced
+  `left: NaN` styles for allocations missing start/end dates (many real
+  issues). Added a `Number.isNaN` guard before computing bar geometry.
+
+Validation: typecheck (front+server) pass, lint 2 pre-existing warnings,
+frontend 47 files / 344 tests, server 14 files / 73 tests, build OK.
+Browser-verified at `localhost:5174`.
+
+**Decisions locked (user, 2026-05-26):** Q1 = (b) scope the Gantt to the
+AIRCRAFT ENGINEERING project tree + paginate (small backend change). Q2 =
+(a) yes, embed a compact read-only team Gantt on `/hours` in addition to the
+`/resources` sub-link. Q3 = record CR #17 to make the dead Dashboard tabs
+real (separate from this CR).
+
+**Decisions locked (user, 2026-05-26):** Q1 = (b) scope the Gantt to the
+AIRCRAFT ENGINEERING project tree + paginate (small backend change). Q2 =
+(a) yes, embed a compact read-only team Gantt on `/hours` in addition to the
+`/resources` sub-link. Q3 = record CR #17 to make the dead Dashboard tabs
+real (separate from this CR).
+
+**Request (verbatim):**
+> Time tracking page should be a drop down under Hours. Resource Management
+> should be a dropdown under Hours tab. Will you be able to pull data from
+> resource tracking in Redmine to help recreate the Gantt chart? If so add
+> it to the page that shows the team hours. Is your team's work going to
+> show anything when live testing? Is project health going to show
+> something? Is resource planning going to show something?
+
+### Investigation findings (answers to the questions)
+
+- **"Your Team's Work", "Project Health", "Resource Planning" are dead
+  tabs.** In `src/pages/Dashboard.tsx` the `TABS` array renders a row of
+  tab buttons and `setTab` updates the highlight, but **nothing reads
+  `tab`** — all four tabs render the identical content (the metrics grid +
+  the "My Tasks" `IssueTable`, which is *your* issues). So in live testing
+  none of the three show anything tab-specific. They are cosmetic
+  placeholders. Fixing them is **not part of this CR** — flagged as a
+  candidate for a separate CR #17.
+- **Gantt from Redmine "resource tracking": feasible, with caveats.**
+  Redmine core has **no resource-allocation API** — its own Gantt is
+  derived from issue `start_date` / `due_date`. The backend already does
+  this: `/api/redmine/gantt` (`server/src/routes/gantt.ts`) builds Gantt
+  rows from `/issues.json` (+ estimated/spent/relations), and
+  `realRedmineApi.getResourceAllocations()` maps them. The existing
+  `ResourceTimeline` component (rendered at `/resources`) already draws
+  this Gantt. **Caveats from probing the live endpoint:** of the first 100
+  issues, only ~20 have both start+due dates (sparse bars) and ~21 have an
+  assignee; the route caps at 100 issues with no project scoping.
+
+### Shape of the change
+
+A. **Sidebar: "Hours" becomes an expandable group.** Reuses the nested
+sub-link machinery built in CR #15 (no new mechanism). Children:
+- Time Tracking → `/time`
+- Resource Management → `/resources`
+The Hours parent link still navigates to `/hours`. Group state persists to
+localStorage; sub-links hide when the rail is collapsed (matches CR #15
+Q6). These two pages are currently only reachable via Home tools / the
+right panel — this gives them a home in the rail.
+
+B. **Team Gantt on the Hours (team-hours) page.** `/hours` is the
+per-engineer team-hours landing (this week / last week). Add a Gantt
+section that reuses the existing `ResourceTimeline` + `getResourceAllocations`
+(team view = all users). Read-only, no new component needed.
+
+### Files
+
+**Edit**
+- `src/components/Sidebar.tsx` — add `children` to the Hours nav item
+  (`/time`, `/resources`). Mechanism already exists.
+- `src/tests/Sidebar.test.tsx` — assert the Hours group renders its two
+  sub-links and toggles.
+- `src/pages/Hours.tsx` — add a "Team schedule (Gantt)" section that loads
+  users + issues + allocations and renders `ResourceTimeline` for the whole
+  team. Compact, read-only.
+- `src/tests/Hours.test.tsx` — assert the Gantt section renders.
+- (Possibly) `server/src/routes/gantt.ts` + `realRedmineApi` — only if we
+  decide to scope/paginate the Gantt (see Q1). Out of scope unless chosen.
+
+**No changes**
+- `ResourceManagement.tsx`, `TimeTracking.tsx` — unchanged; just gain a
+  sidebar home. The Gantt logic is reused, not duplicated.
+
+### Data / API assumptions
+
+- Consumes existing `getResourceAllocations()` (→ `/api/redmine/gantt`),
+  `getUsers()`, `getIssues()`. No new endpoints unless Q1 says to scope.
+- Read-only; safe to ship before Section 15.
+
+### Open questions
+
+- **Q1 — Gantt scope/quality.** The live `/gantt` returns 100 issues
+  instance-wide and only ~20% carry start+due dates, so a raw team Gantt
+  will look sparse. Options: (a) ship as-is (sparse but honest), (b) scope
+  the Gantt to the AIRCRAFT ENGINEERING project tree + paginate so it's
+  denser and relevant (needs a small backend/adapter change — a `project_id`
+  filter + paging on the gantt route). Recommend (b) if you want it useful,
+  (a) if you just want it visible for now.
+- **Q2 — Redundancy / placement.** Resource Management (the full Gantt) is
+  becoming a sub-link directly under Hours. Do you still want a second
+  Gantt embedded on the Hours landing? Options: (a) yes — compact read-only
+  team Gantt on `/hours` + full interactive one at `/resources`; (b) no —
+  the sub-link is enough, skip the embed. Recommend (a) per your request,
+  but flagging the overlap.
+- **Q3 — Dead Dashboard tabs.** Want me to spin up CR #17 to make "Your
+  Team's Work" / "Project Health" / "Resource Planning" actually render
+  distinct content, or leave them for now?
+
+### Size
+
+Small. (A) is a few lines reusing existing machinery. (B) reuses an
+existing component. Backend scoping (Q1b) would add a small route change.
+
+---
+
+## #17 — Make the Dashboard tabs render real, distinct content
+
+**Status:** 📥 Collected (planned after CR #16)
+
+**Origin:** Surfaced during CR #16 investigation. `src/pages/Dashboard.tsx`
+declares four tabs — `Your Work`, `Your Team's Work`, `Project Health`,
+`Resource Planning` — but the tab state is never read, so all four show the
+same metrics grid + "My Tasks" table.
+
+**Goal:** Each tab should render distinct content:
+- **Your Work** — current behavior (your metrics + your issues). Keep.
+- **Your Team's Work** — team-wide issues (all assignees), not just yours;
+  team metrics.
+- **Project Health** — per-project status/health view (open vs. closed,
+  at-risk, % done) across the active portfolio. Likely reuses the CR #15
+  project-tree + issue stats.
+- **Resource Planning** — the team Gantt (reuse `ResourceTimeline`), or a
+  link/embed of `/resources`.
+
+**Open questions for the scaffold plan:**
+- Should each tab swap the whole body, or keep the metrics row and only
+  swap the lower section?
+- "Project Health" — derive from the AIRCRAFT ENGINEERING tree (CR #15) or
+  all projects?
+- Avoid duplicating the Gantt if CR #16 already embeds one on `/hours`.
+
+**Size:** Medium. Will be planned in full once CR #16 ships.
+
+---
+
 ## #15 — Projects page as category dashboard + All Projects as Projects sub-link
 
 **Status:** ✅ Shipped

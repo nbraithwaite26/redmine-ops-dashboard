@@ -289,8 +289,13 @@ export const mockRedmineApi: RedmineApi = {
     return wait({ logged, target: 360 });
   },
 
-  async getResourceAllocations() {
+  async getResourceAllocations(_projectId?: number) {
+    // Mock ignores the project scope; the in-memory set is already small.
     return wait(mockAllocations);
+  },
+
+  async getTeamSchedule(_projectId?: number) {
+    return wait({ users: mockUsers, issues, allocations: mockAllocations });
   },
 
   // ─── Directory ───────────────────────────────────────────────────────

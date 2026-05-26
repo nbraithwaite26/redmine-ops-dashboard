@@ -32,6 +32,17 @@ describe('<Hours />', () => {
     expect(screen.getByTestId('hours-section--1')).toBeInTheDocument();
   });
 
+  it('renders the team schedule (Gantt) section', async () => {
+    renderHours();
+    const gantt = await screen.findByTestId('team-gantt');
+    expect(gantt).toBeInTheDocument();
+    expect(within(gantt).getByText('Team schedule')).toBeInTheDocument();
+    // ResourceTimeline renders its "Resource allocation" header once mounted.
+    await waitFor(() =>
+      expect(within(gantt).getByText('Resource allocation')).toBeInTheDocument(),
+    );
+  });
+
   it('each section loads, then either renders user cards or an empty state', async () => {
     renderHours();
     // Wait for the loading rows to disappear in both sections.

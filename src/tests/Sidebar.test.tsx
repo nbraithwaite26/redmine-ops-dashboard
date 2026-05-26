@@ -47,6 +47,34 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
     );
   });
 
+  it('shows Time Tracking and Resource Management as sub-links of Hours', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Time Tracking' })).toHaveAttribute(
+      'href',
+      '/time',
+    );
+    expect(screen.getByRole('link', { name: 'Resource Management' })).toHaveAttribute(
+      'href',
+      '/resources',
+    );
+  });
+
+  it('toggling the Hours group hides/shows its sub-links', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Time Tracking' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('sidebar-group-toggle-hours'));
+    expect(screen.queryByRole('link', { name: 'Time Tracking' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Resource Management' })).not.toBeInTheDocument();
+  });
+
   it('toggling the Projects group hides/shows its sub-links', () => {
     render(
       <MemoryRouter>
@@ -74,6 +102,9 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
     // Q6: sub-links are not rendered at all when the rail is collapsed.
     expect(screen.queryByRole('link', { name: 'All Projects' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-group-toggle-projects')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Time Tracking' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Resource Management' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-group-toggle-hours')).not.toBeInTheDocument();
   });
 
   it('popout/toggle button is visible when expanded and fires onToggle', () => {

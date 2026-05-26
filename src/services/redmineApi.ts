@@ -67,6 +67,7 @@ export const getCustomFields = api.getCustomFields.bind(api);
 export const getWeeklyHours = api.getWeeklyHours.bind(api);
 export const getTeamHours = api.getTeamHours.bind(api);
 export const getResourceAllocations = api.getResourceAllocations.bind(api);
+export const getTeamSchedule = api.getTeamSchedule.bind(api);
 
 export const getDirectoryLinks = api.getDirectoryLinks.bind(api);
 

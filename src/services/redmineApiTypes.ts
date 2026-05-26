@@ -71,7 +71,18 @@ export interface RedmineApi {
   // ─── Reports ──────────────────────────────────────────────────────────
   getWeeklyHours(userId?: number): Promise<{ logged: number; target: number }>;
   getTeamHours(): Promise<{ logged: number; target: number }>;
-  getResourceAllocations(): Promise<ResourceAllocation[]>;
+  getResourceAllocations(projectId?: number): Promise<ResourceAllocation[]>;
+  /**
+   * Team Gantt inputs derived from a single scoped /gantt fetch. Unlike
+   * getUsers() (which 403s for non-admin keys), the user list here is
+   * derived from issue assignees in the Gantt rows, so the schedule
+   * populates even when the users endpoint is degraded. CR #16.
+   */
+  getTeamSchedule(projectId?: number): Promise<{
+    users: User[];
+    issues: Issue[];
+    allocations: ResourceAllocation[];
+  }>;
 
   // ─── Directory ────────────────────────────────────────────────────────
   getDirectoryLinks(): Promise<DirectoryLink[]>;

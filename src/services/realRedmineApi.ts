@@ -67,6 +67,76 @@ interface ProjectDetailWire extends Project {
   issueCategories?: string[];
 }
 
+function ganttRowToAllocation(row: GanttRow): ResourceAllocation {
+  return {
+    id: row.id,
+    userId: row.assigneeId ?? 0,
+    issueId: row.issueId,
+    projectId: row.projectId,
+    startDate: row.startDate ?? '',
+    endDate: row.dueDate ?? '',
+    allocatedHours: row.estimatedHours ?? 0,
+    spentHours: row.spentHours,
+    allocationType: 'Auto',
+    isOverloaded: row.isOverloaded,
+  };
+}
+
+/**
+ * Build a minimal Issue from a Gantt row for the team-schedule left panel.
+ * Gantt rows omit a few Issue fields (priority, author, timestamps); those
+ * get sensible defaults since the timeline only reads subject / project /
+ * estimated / spent / assignee / dates.
+ */
+function ganttRowToIssue(row: GanttRow): Issue {
+  const assignee: User | null =
+    row.assigneeId !== null
+      ? {
+          id: row.assigneeId,
+          name: row.assigneeName ?? `User ${row.assigneeId}`,
+          email: '',
+          login: '',
+          status: 'Active',
+          groups: [],
+          roles: [],
+        }
+      : null;
+  return {
+    id: row.issueId,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    tracker: row.tracker as Tracker,
+    status: row.status as IssueStatus,
+    priority: 'Normal',
+    subject: row.subject,
+    description: '',
+    assignee,
+    author:
+      assignee ?? {
+        id: 0,
+        name: 'Unknown',
+        email: '',
+        login: '',
+        status: 'Active',
+        groups: [],
+        roles: [],
+      },
+    startDate: row.startDate,
+    dueDate: row.dueDate,
+    estimatedHours: row.estimatedHours,
+    spentHours: row.spentHours,
+    doneRatio: row.doneRatio,
+    parentIssueId: row.parentIssueId,
+    children: row.children,
+    relations: row.relations,
+    customFields: [],
+    nextAction: null,
+    createdOn: '',
+    updatedOn: '',
+    closedOn: null,
+  };
+}
+
 // ─── Metadata coordinator (plan §7.8.1) ──────────────────────────────────
 // All four metadata methods share a single in-flight Promise<MetadataBundle>.
 // First caller triggers /metadata; subsequent callers await the same
@@ -575,20 +645,33 @@ export const realRedmineApi: RedmineApi = {
     return { logged, target: 360 };
   },
 
-  async getResourceAllocations(): Promise<ResourceAllocation[]> {
-    const res = await cachedGet<{ items: GanttRow[]; total: number }>('/gantt');
-    return res.items.map<ResourceAllocation>((row) => ({
-      id: row.id,
-      userId: row.assigneeId ?? 0,
-      issueId: row.issueId,
-      projectId: row.projectId,
-      startDate: row.startDate ?? '',
-      endDate: row.dueDate ?? '',
-      allocatedHours: row.estimatedHours ?? 0,
-      spentHours: row.spentHours,
-      allocationType: 'Auto',
-      isOverloaded: row.isOverloaded,
-    }));
+  async getResourceAllocations(projectId?: number): Promise<ResourceAllocation[]> {
+    const res = await cachedGet<{ items: GanttRow[]; total: number }>(
+      '/gantt',
+      projectId !== undefined ? { project_id: projectId } : undefined,
+    );
+    return res.items.map(ganttRowToAllocation);
+  },
+
+  async getTeamSchedule(projectId?: number): Promise<{
+    users: User[];
+    issues: Issue[];
+    allocations: ResourceAllocation[];
+  }> {
+    const res = await cachedGet<{ items: GanttRow[]; total: number }>(
+      '/gantt',
+      projectId !== undefined ? { project_id: projectId } : undefined,
+    );
+    const userMap = new Map<number, User>();
+    const issues: Issue[] = [];
+    const allocations: ResourceAllocation[] = [];
+    for (const row of res.items) {
+      const issue = ganttRowToIssue(row);
+      issues.push(issue);
+      if (issue.assignee) userMap.set(issue.assignee.id, issue.assignee);
+      allocations.push(ganttRowToAllocation(row));
+    }
+    return { users: [...userMap.values()], issues, allocations };
   },
 
   async getDirectoryLinks(): Promise<DirectoryLink[]> {
