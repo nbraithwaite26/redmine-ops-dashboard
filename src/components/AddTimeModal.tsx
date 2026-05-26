@@ -6,8 +6,9 @@ import {
   mockTimeActivities,
   mockUsers,
 } from '../data/mockData';
-import { createTimeEntry } from '../services/redmineApi';
 import { useDialogA11y } from '../hooks/useDialogA11y';
+import { useTimeEntryActions } from '../hooks/useTimeEntryActions';
+import { useReadOnly } from '../hooks/useReadOnly';
 
 interface Props {
   onClose: () => void;
@@ -30,19 +31,26 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
   const [comments, setComments] = useState('');
 
   const projectIssues = mockIssues.filter((i) => i.projectId === projectId);
+  const { saving, create } = useTimeEntryActions();
+  const { readOnly } = useReadOnly();
 
   const save = async () => {
     const user = mockUsers.find((u) => u.id === userId)!;
-    await createTimeEntry({
-      user,
-      projectId,
-      issueId,
-      activity,
-      hours: Number(hours) || 0,
-      spentOn,
-      comments,
-    });
-    onCreated();
+    try {
+      await create({
+        user,
+        projectId,
+        issueId,
+        activity,
+        hours: Number(hours) || 0,
+        spentOn,
+        comments,
+      });
+      onCreated();
+      onClose();
+    } catch {
+      // Toast already surfaced; keep the modal open for retry.
+    }
   };
 
   const dialogRef = useDialogA11y({ open: true, onClose });
@@ -163,8 +171,13 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
           <button className="btn-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn-brand" onClick={save}>
-            <Save size={14} /> Save
+          <button
+            className="btn-brand"
+            onClick={save}
+            disabled={saving || readOnly}
+            title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+          >
+            <Save size={14} /> {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>

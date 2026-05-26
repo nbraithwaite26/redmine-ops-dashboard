@@ -3,13 +3,14 @@ import { Download, Plus, Trash2 } from 'lucide-react';
 import AddTimeModal from '../components/AddTimeModal';
 import DashboardCard from '../components/DashboardCard';
 import {
-  deleteTimeEntry,
   getTeamHours,
   getTimeEntries,
   getWeeklyHours,
 } from '../services/redmineApi';
 import { buildTimeMetrics, mockIssues, mockProjects } from '../data/mockData';
 import { useAsyncResource } from '../hooks/useAsyncResource';
+import { useReadOnly } from '../hooks/useReadOnly';
+import { useTimeEntryActions } from '../hooks/useTimeEntryActions';
 import type { TimeEntry } from '../types/redmine';
 
 type Range = 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly';
@@ -42,6 +43,8 @@ export default function TimeTracking() {
   const [range, setRange] = useState<Range>('Weekly');
   const [groupBy, setGroupBy] = useState<GroupBy>('None');
   const [addOpen, setAddOpen] = useState(false);
+  const { readOnly } = useReadOnly();
+  const { remove: removeEntry, saving: removing } = useTimeEntryActions();
 
   const grouped = useMemo(() => {
     if (groupBy === 'None') return [{ label: 'All entries', entries }];
@@ -142,11 +145,17 @@ export default function TimeTracking() {
                     <td className="px-3 py-2 text-ink-soft truncate max-w-[260px]">{e.comments}</td>
                     <td className="px-3 py-2">
                       <button
-                        className="p-1 rounded hover:bg-gray-100"
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label={`Delete time entry ${e.id}`}
+                        disabled={removing || readOnly}
+                        title={readOnly ? 'Read-only mode — writes disabled' : undefined}
                         onClick={async () => {
-                          await deleteTimeEntry(e.id);
-                          await reload();
+                          try {
+                            await removeEntry(e.id);
+                            await reload();
+                          } catch {
+                            // Toast already surfaced.
+                          }
                         }}
                       >
                         <Trash2 size={14} />

@@ -153,6 +153,15 @@ function clearIssueCacheFor(id: number) {
   }
 }
 
+/** Drop every cached `/time-entries*` list response. */
+function clearTimeEntryCache() {
+  for (const key of cache.keys()) {
+    if (key.startsWith('/time-entries')) {
+      cache.delete(key);
+    }
+  }
+}
+
 // ─── Connection / config (UI-side, localStorage) ─────────────────────────
 
 const CONNECTION_SETTINGS_KEY = 'redmine-ops:connection-settings';
@@ -415,14 +424,50 @@ export const realRedmineApi: RedmineApi = {
     return res.items;
   },
 
-  async createTimeEntry(): Promise<TimeEntry> {
-    notImplementedWrite('createTimeEntry');
+  async createTimeEntry(input: Partial<TimeEntry>): Promise<TimeEntry> {
+    if (input.hours === undefined || input.hours === null) {
+      throw new HttpError(400, 'BAD_REQUEST', 'createTimeEntry requires hours.');
+    }
+    if (!input.spentOn) {
+      throw new HttpError(400, 'BAD_REQUEST', 'createTimeEntry requires spentOn.');
+    }
+    if (input.projectId === undefined && input.issueId === undefined) {
+      throw new HttpError(
+        400,
+        'BAD_REQUEST',
+        'createTimeEntry requires projectId or issueId.',
+      );
+    }
+    const body: Record<string, unknown> = {
+      hours: input.hours,
+      spentOn: input.spentOn,
+    };
+    if (input.activity !== undefined) body.activity = input.activity;
+    if (input.comments !== undefined) body.comments = input.comments;
+    if (input.projectId !== undefined) body.projectId = input.projectId;
+    if (input.issueId !== undefined) body.issueId = input.issueId;
+
+    const created = await httpJson<TimeEntry>('POST', '/time-entries', body);
+    clearTimeEntryCache();
+    return created;
   },
-  async updateTimeEntry(): Promise<TimeEntry> {
-    notImplementedWrite('updateTimeEntry');
+  async updateTimeEntry(id: number, patch: Partial<TimeEntry>): Promise<TimeEntry> {
+    const body: Record<string, unknown> = {};
+    if (patch.hours !== undefined) body.hours = patch.hours;
+    if (patch.spentOn !== undefined) body.spentOn = patch.spentOn;
+    if (patch.activity !== undefined) body.activity = patch.activity;
+    if (patch.comments !== undefined) body.comments = patch.comments;
+    if (patch.projectId !== undefined) body.projectId = patch.projectId;
+    if (patch.issueId !== undefined) body.issueId = patch.issueId;
+
+    const updated = await httpJson<TimeEntry>('PATCH', `/time-entries/${id}`, body);
+    clearTimeEntryCache();
+    return updated;
   },
-  async deleteTimeEntry(): Promise<{ id: number }> {
-    notImplementedWrite('deleteTimeEntry');
+  async deleteTimeEntry(id: number): Promise<{ id: number }> {
+    const result = await httpJson<{ id: number }>('DELETE', `/time-entries/${id}`);
+    clearTimeEntryCache();
+    return result;
   },
 
   async getUsers(): Promise<User[]> {
