@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
+import CreateIssueModal from '../components/CreateIssueModal';
 import GroupedTaskTable from '../components/GroupedTaskTable';
 import IssueTable from '../components/IssueTable';
 import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useReadOnly } from '../hooks/useReadOnly';
 import {
   getIssues,
   getMyIssues,
@@ -20,6 +23,8 @@ export default function Tasks() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [openIssue, setOpenIssue] = useState<Issue | null>(null);
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const { readOnly } = useReadOnly();
 
   const load = async () => {
     const uid = currentUser?.id;
@@ -42,11 +47,22 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Tasks</h1>
-        <p className="text-sm text-ink-muted">
-          Your work plus a per-user view of the rest of the team.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Tasks</h1>
+          <p className="text-sm text-ink-muted">
+            Your work plus a per-user view of the rest of the team.
+          </p>
+        </div>
+        <button
+          className="btn-brand whitespace-nowrap"
+          onClick={() => setCreateOpen(true)}
+          disabled={readOnly}
+          title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+          data-testid="tasks-new-issue"
+        >
+          <Plus size={14} /> New issue
+        </button>
       </div>
 
       <section>
@@ -99,6 +115,18 @@ export default function Tasks() {
           onQuickEdit={(i) => {
             setOpenIssue(null);
             setQuickIssue(i);
+          }}
+        />
+      )}
+
+      {createOpen && (
+        <CreateIssueModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(issue) => {
+            setCreateOpen(false);
+            void load();
+            // Open the new issue's drawer so the user can flesh it out.
+            setOpenIssue(issue);
           }}
         />
       )}
