@@ -93,7 +93,26 @@ export default function Tasks() {
         <QuickEditPopup
           issue={quickIssue}
           onClose={() => setQuickIssue(null)}
-          onSaved={() => void load()}
+          onSaved={(updated) => {
+            // The update may flip assignment between my/team lists.
+            // Replace where it lives + move if the assignee changed.
+            const nowMine = updated.assignee?.id === currentUser?.id;
+            if (nowMine) {
+              setMyIssues((prev) =>
+                prev.some((i) => i.id === updated.id)
+                  ? prev.map((i) => (i.id === updated.id ? updated : i))
+                  : [updated, ...prev],
+              );
+              setTeamIssues((prev) => prev.filter((i) => i.id !== updated.id));
+            } else {
+              setTeamIssues((prev) =>
+                prev.some((i) => i.id === updated.id)
+                  ? prev.map((i) => (i.id === updated.id ? updated : i))
+                  : [updated, ...prev],
+              );
+              setMyIssues((prev) => prev.filter((i) => i.id !== updated.id));
+            }
+          }}
           onOpenFullEditor={(i) => {
             setQuickIssue(null);
             setOpenIssue(i);
@@ -104,13 +123,29 @@ export default function Tasks() {
         <TicketDrawer
           issue={openIssue}
           onClose={() => setOpenIssue(null)}
-          onSaved={() => {
+          onSaved={(updated) => {
             setOpenIssue(null);
-            void load();
+            const nowMine = updated.assignee?.id === currentUser?.id;
+            if (nowMine) {
+              setMyIssues((prev) =>
+                prev.some((i) => i.id === updated.id)
+                  ? prev.map((i) => (i.id === updated.id ? updated : i))
+                  : [updated, ...prev],
+              );
+              setTeamIssues((prev) => prev.filter((i) => i.id !== updated.id));
+            } else {
+              setTeamIssues((prev) =>
+                prev.some((i) => i.id === updated.id)
+                  ? prev.map((i) => (i.id === updated.id ? updated : i))
+                  : [updated, ...prev],
+              );
+              setMyIssues((prev) => prev.filter((i) => i.id !== updated.id));
+            }
           }}
-          onDeleted={() => {
+          onDeleted={(id) => {
             setOpenIssue(null);
-            void load();
+            setMyIssues((prev) => prev.filter((i) => i.id !== id));
+            setTeamIssues((prev) => prev.filter((i) => i.id !== id));
           }}
           onQuickEdit={(i) => {
             setOpenIssue(null);
@@ -124,8 +159,14 @@ export default function Tasks() {
           onClose={() => setCreateOpen(false)}
           onCreated={(issue) => {
             setCreateOpen(false);
-            void load();
-            // Open the new issue's drawer so the user can flesh it out.
+            // Place the new issue in the correct list based on assignment.
+            const goesToMyList = issue.assignee?.id === currentUser?.id;
+            if (goesToMyList) {
+              setMyIssues((prev) => [issue, ...prev]);
+            } else {
+              setTeamIssues((prev) => [issue, ...prev]);
+            }
+            // Auto-open the drawer so the user can flesh out the new issue.
             setOpenIssue(issue);
           }}
         />

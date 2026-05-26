@@ -40,7 +40,9 @@ export default function MyTasks() {
         <QuickEditPopup
           issue={quickIssue}
           onClose={() => setQuickIssue(null)}
-          onSaved={() => void load()}
+          onSaved={(updated) =>
+            setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+          }
           onOpenFullEditor={(i) => {
             setQuickIssue(null);
             setOpenIssue(i);
@@ -51,9 +53,13 @@ export default function MyTasks() {
         <TicketDrawer
           issue={openIssue}
           onClose={() => setOpenIssue(null)}
-          onSaved={() => {
+          onSaved={(updated) => {
             setOpenIssue(null);
-            void load();
+            setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+          }}
+          onDeleted={(id) => {
+            setOpenIssue(null);
+            setIssues((prev) => prev.filter((i) => i.id !== id));
           }}
           onQuickEdit={(i) => {
             setOpenIssue(null);

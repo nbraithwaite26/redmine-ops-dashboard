@@ -118,8 +118,9 @@ export default function Dashboard() {
         <QuickEditPopup
           issue={quickIssue}
           onClose={() => setQuickIssue(null)}
-          onSaved={() => {
-            void load(currentUser?.id);
+          onSaved={(updated) => {
+            setMyIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+            setAllIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
           }}
           onOpenFullEditor={(i) => {
             setQuickIssue(null);
@@ -131,9 +132,16 @@ export default function Dashboard() {
         <TicketDrawer
           issue={openIssue}
           onClose={() => setOpenIssue(null)}
-          onSaved={() => {
+          onSaved={(updated) => {
             setOpenIssue(null);
-            void load(currentUser?.id);
+            setMyIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+            setAllIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+          }}
+          onDeleted={(id) => {
+            setOpenIssue(null);
+            setMyIssues((prev) => prev.filter((i) => i.id !== id));
+            setAllIssues((prev) => prev.filter((i) => i.id !== id));
+            setPastDue((prev) => prev.filter((i) => i.id !== id));
           }}
           onQuickEdit={(i) => {
             setOpenIssue(null);
