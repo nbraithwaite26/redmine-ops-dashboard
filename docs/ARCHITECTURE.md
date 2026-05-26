@@ -1,11 +1,13 @@
 # Architecture
 
 This document describes how the Redmine Operations Dashboard is structured
-and how data flows. It is the document to read first when planning the live
-Redmine integration.
+and how data flows. The dashboard is a **two-process app**: a Vite/React
+frontend and a Hono backend in the `server/` workspace. The backend
+brokers every call to Redmine so the API key never reaches the browser.
 
 ## Stack
 
+**Frontend**
 - **React 18** with functional components and hooks.
 - **TypeScript** (strict mode) for the whole codebase.
 - **Vite** for dev server and production build.
@@ -17,76 +19,162 @@ Redmine integration.
 - **lucide-react** for icons.
 - **Vitest** + **@testing-library/react** + **jest-dom** for tests.
 
+**Backend (`server/`)**
+- **Hono** on Node 20+.
+- **zod** for env loading + request payload validation.
+- **bcryptjs** for admin password hashing.
+- **HMAC-SHA256** for signing session cookies.
+- **Vitest** for route + adapter + middleware tests.
+
 ## Directory layout
 
 ```
-src/
-  main.tsx                  React entry; wraps App in HashRouter
-  App.tsx                   Route declarations
-  index.css                 Tailwind base + component utilities
+src/                          Frontend
+  main.tsx                    React entry; wraps App in HashRouter
+  App.tsx                     Route declarations (incl. /login, /admin)
+  index.css                   Tailwind base + component utilities + theme vars
 
-  components/               Reusable building blocks
-    AppShell.tsx              Lays out TopBar / Sidebar / SecondaryNav / RightPanel
-    TopBar.tsx                Yellow header
-    Sidebar.tsx               Vertical icon nav
-    SecondaryNav.tsx          Filterable workspace list
-    RightPanel.tsx            Announcements / Upcoming / Quick links / Activity
-    DashboardCard.tsx         Metric card wrapper
-    DonutChart.tsx            SVG donut
-    IssueTable.tsx            Reusable issue table (search/sort/select/quick actions)
-    QuickEditPopup.tsx        Small popup for fast ticket updates + time log
-    TicketDrawer.tsx          Full slide-out ticket editor
-    ResourceTimeline.tsx      Gantt-style allocation grid
+  components/                 Reusable building blocks
+    AppShell.tsx                TopBar + Sidebar + RightPanel + sticky layout
+    TopBar.tsx                  Yellow #FEDF00 header; sync button; last-sync chip
+    Sidebar.tsx                 Vertical icon nav (collapsible)
+    RightPanel.tsx              Announcements / Upcoming / Quick links / Activity
+    StatusBanner.tsx            Mock-mode / read-only / sync banner under TopBar
+    DashboardCard.tsx           Metric card driven by DashboardMetric[]
+    DonutChart.tsx              SVG donut (opt-in; default visual is conic-gradient)
+    IssueTable.tsx + IssueRow   Issue table with search/sort/select/quick actions
+    QuickEditPopup.tsx          Small popup for fast ticket updates + time log
+    TicketDrawer.tsx            Slide-out ticket editor (a11y dialog)
+    ResourceTimeline.tsx        Gantt-style allocation grid
+    RequireAdmin.tsx            Route guard for /admin
 
-  pages/                    Routes
-    Home.tsx
-    Dashboard.tsx
-    MyTasks.tsx
-    PastDue.tsx
-    Projects.tsx
-    ProjectBuilder.tsx
-    ResourceManagement.tsx
-    TimeTracking.tsx
-    Reports.tsx
-    Directory.tsx
-    Settings.tsx
+  pages/                      Routes (Home, Dashboard, Tasks, Calendar, Hours,
+                              Directory, AllProjects, Projects, Settings,
+                              Admin, Login, ResourceManagement, ProjectBuilder, ...)
 
-  data/mockData.ts          Generic mock users, projects, issues, time entries,
-                            allocations, directory links, metadata
-  services/redmineApi.ts    Async functions: every UI call goes through here
-  types/redmine.ts          Domain TypeScript interfaces
-  lib/format.ts             Date / priority / status helpers + isOverdue
+  hooks/
+    useSession.ts               /api/auth/me + signIn/signOut (mock-mode shortcut)
+    useCurrentUser.ts           /api/redmine/me hydration
+    useReadOnly.ts              ConnectionStatus.readOnly hydration
+    useTheme.ts                 light/dark toggle (system-aware)
+    useSidebarCollapse.ts       persisted sidebar state
+    useSyncBanner.ts            sync-status state machine
+    useAsyncResource.ts         load-on-mount + reload helper
+    useDialogA11y.ts            focus trap + ESC for dialogs
 
-  tests/                    Vitest suites
-    setup.ts                  jest-dom import
-    api.test.ts
-    IssueTable.test.tsx
-    QuickEditPopup.test.tsx
-    TicketDrawer.test.tsx
-    Dashboard.test.tsx
-    SecondaryNav.test.tsx
+  services/
+    redmineApi.ts               Facade — picks real vs. mock from VITE_MOCK_MODE
+    realRedmineApi.ts           HTTP client + TTL cache + metadata coordinator
+    mockRedmineApi.ts           In-memory fabricator (offline demos + tests)
+    adminApi.ts                 /api/auth + /api/admin + /api/sync-events client
+    http.ts                     Shared fetch helper for the Redmine proxy
+
+  data/mockData.ts            Generic mock users, projects, issues, time entries
+  types/redmine.ts            Domain TypeScript interfaces
+  lib/format.ts               Date / priority / status helpers; MOCK_TODAY + today()
+
+  tests/                      Frontend Vitest suites (35 files, 264 tests)
+
+server/                       Backend (Hono on :8787)
+  src/
+    index.ts                    App bootstrap; mounts middleware + all routes
+    config.ts                   zod env loader (Redmine + admin + session)
+    redmineClient.ts            X-Redmine-API-Key injection + RedmineHttpError
+
+    middleware/
+      requestId.ts                stamps a UUID on every request for log correlation
+      readOnly.ts                 403 READ_ONLY on non-GET to /api/redmine/* when
+                                  REDMINE_READ_ONLY=true
+      errorHandler.ts             uniform { error: { code, message, requestId } } shape
+      rateLimit.ts                process-local token bucket (default 20 req/s/IP)
+      session.ts                  session() + requireSession()
+
+    auth/
+      password.ts                 bcrypt verify / hash helpers
+      cookies.ts                  HMAC-SHA256 signed session cookies (HttpOnly+SameSite=Lax)
+
+    store/
+      sessionStore.ts             in-memory session map (12h rolling)
+      historyStore.ts             JSONL append-only sync + login event store
+
+    routes/
+      me.ts                       /api/redmine/me
+      users.ts                    /api/redmine/users + /:id
+      projects.ts                 /api/redmine/projects (+ detail + members)
+      issues.ts                   /api/redmine/issues (+ detail)
+      timeEntries.ts              /api/redmine/time-entries
+      metadata.ts                 /api/redmine/metadata (sampled custom fields)
+      gantt.ts                    /api/redmine/gantt
+      auth.ts                     /api/auth/{me,login,logout}
+      syncEvents.ts               /api/sync-events (POST)
+      admin/
+        users.ts                    /api/admin/users (degrades gracefully on 403)
+        permissions.ts              /api/admin/permissions (project × user × role)
+        history.ts                  /api/admin/history (filtered, paginated)
+
+    adapters/                   snake_case Redmine DTO → camelCase domain
+    types/                      redmineDto.ts (snake), normalized.ts (camel),
+                                appVars.ts (shared Hono Variables)
+
+  test/                       Backend Vitest suites (10 files, 39 tests)
+    fixtures/                   Anonymized JSON (Project A, Test One, ...)
+  scripts/hash-password.mjs   Generates ADMIN_PASSWORD_HASH for .env.local
 
 .github/workflows/
-  ci.yml                    Push/PR: typecheck + lint + tests + build
-  deploy.yml                Push to main: build + deploy to GitHub Pages
+  ci.yml                      Push/PR: typecheck + lint + tests + build
+  deploy.yml                  Push to main: build + deploy to GitHub Pages
 ```
 
 ## Data flow
 
 ```
-UI component  ──►  src/services/redmineApi.ts  ──►  in-memory mock state
-                                                     (src/data/mockData.ts seeds)
+Browser ─fetch /api/redmine/...─► Vite dev proxy ──► Hono backend :8787
+                                                       │
+                                                       ├─ requestId
+                                                       ├─ readOnly (blocks non-GET when REDMINE_READ_ONLY=true)
+                                                       ├─ rateLimit (token bucket / IP)
+                                                       ├─ route handler
+                                                       └─ redmineClient ─HTTP+X-Redmine-API-Key─► Redmine
+                                                              │
+                                                              └─ snake_case DTO ─adapter─► camelCase domain ─► JSON
 ```
 
-The whole app talks to **`redmineApi.ts`** — no component imports from
-`mockData.ts` for its own data fetching. This is intentional: when you swap
-the mock bodies for real `fetch` calls (or a backend proxy), the UI doesn't
-change.
+Frontend pages never import `data/mockData.ts` directly for fetching. Every
+call goes through the `services/redmineApi.ts` facade, which picks the
+real HTTP client or the mock in-memory store based on `VITE_MOCK_MODE`.
+This keeps the page code identical across modes.
 
-State that the UI mutates (issue updates, new time entries, new projects)
-lives in module-scoped `let` variables inside `redmineApi.ts`. This makes
-edits visible across pages within a session but reset on reload — fine for
-demo / scaffold work.
+### Metadata coordinator
+
+`realRedmineApi.ts` consolidates all `/metadata` lookups (statuses, trackers,
+priorities, time activities, custom fields) into a **single in-flight promise**
+with a 5-minute TTL. First caller triggers `GET /api/redmine/metadata`;
+subsequent callers await the same promise. `syncWithRedmine()` resets the
+promise so the next read re-fetches. This avoids the four-parallel-requests
+fan-out the prior design had.
+
+### Auth + sync events
+
+- `/api/auth/login` accepts `{ user, password }`, verifies against
+  `bcrypt`(`ADMIN_PASSWORD_HASH`), and sets an HMAC-signed session cookie.
+  Failures return a single generic `AUTH_FAILED` code so attackers can't
+  enumerate valid usernames. Login is rate-limited to **5/min/IP** at the
+  middleware layer; rate-limit hits are recorded in the history store.
+- `/api/admin/*` requires a valid session cookie (`requireSession`
+  middleware). 401 responses redirect the frontend to `/login`.
+- `/api/sync-events` is **open** (no session required) — the actor falls
+  back to `'anonymous'` when no session is present. The frontend's
+  `AppShell.handleSync` POSTs success/error events here best-effort. The
+  endpoint sits **outside** `/api/redmine/*` so the read-only middleware
+  doesn't block it.
+
+### Caching
+
+`realRedmineApi.ts` wraps GETs in a TTL cache (60s default, 10s for
+`/issues`). `syncWithRedmine()` blows the cache so the next fetches go to
+the network. The frontend writes the timestamp to `localStorage` under
+`redmine-ops:last-sync-at` so the "Last sync HH:MM" chip in the TopBar
+persists across reloads.
 
 ## Yellow brand color
 
@@ -129,40 +217,38 @@ The Vite `base` is `/redmine-ops-dashboard/` for GitHub Pages; override with
   (e.g. caching loaded issues), introduce React Query or Zustand at that
   point — not preemptively.
 
-## Going live with Redmine
+## Read-only vs. read-write
 
-When you're ready to talk to a real Redmine instance:
+`REDMINE_READ_ONLY=true` (the default) is enforced at two layers:
 
-1. Stand up a **thin backend** (Express, Hono, or a serverless function) that
-   accepts the same shape of requests this UI already makes, and forwards
-   them to Redmine with the `X-Redmine-API-Key` header injected. This solves
-   two problems at once:
-   - The API key never reaches the browser.
-   - You avoid the CORS errors Redmine emits on cross-origin requests.
-2. Replace each function body inside `src/services/redmineApi.ts` with a
-   `fetch('/api/…')` against your backend. Keep return shapes intact so the
-   pages don't need to change.
-3. Drop the in-memory `let issues = […]` lines — your backend (and Redmine)
-   are now the source of truth.
-4. Plug `getCurrentUser()` into your auth flow.
-5. The Settings page already collects base URL + API key + mock mode toggle
-   — wire those into your backend bootstrap.
+1. **Backend middleware.** `middleware/readOnly.ts` returns
+   `403 { error: { code: 'READ_ONLY' } }` for any non-GET hitting
+   `/api/redmine/*`. PATCH/POST/DELETE never reach the route handlers.
+2. **Frontend.** `useReadOnly()` reads the flag from `/api/redmine/me`'s
+   `connectionStatus.readOnly`. Save buttons in `QuickEditPopup`,
+   `TicketDrawer`, and Settings are `disabled` with a tooltip.
 
-If you want a faster path with no backend, you can also use a Redmine plugin
-that allows CORS for your dashboard origin, *but you must accept that the
-API key will live in client storage* — fine for an internal tool on a
-trusted network, **not** appropriate for public hosting.
+When the write endpoints land (Plan Section 10–11) they will exist behind
+the middleware. Flipping `REDMINE_READ_ONLY=false` is the only deploy-time
+change required to enable them.
 
 ## Testing strategy
 
-- **API tests** validate the mock service contract (what the UI relies on).
-- **Component tests** target the high-leverage interactions — table sort/
-  filter/select, opening drawers, save flows — not snapshots.
-- **Page tests** confirm key wiring (tabs render, cards mount).
+- **Frontend** — Vitest + RTL. Component tests target high-leverage
+  interactions (table sort/filter/select, opening drawers, save flows,
+  tab switching) rather than snapshots. Tests run with
+  `VITE_MOCK_MODE=true` (via `.env.test`) so they exercise the real
+  facade against the mock client — no network required.
+- **Backend** — Vitest. Route tests hit each Hono handler with a fake
+  Redmine upstream (a small `app.use('*', mockHandler)` for each fixture).
+  Adapter tests confirm the snake→camel mapping.
+- **Anonymized fixtures only.** Both suites use `Project A`, `Test One`,
+  `astone@example.com`, … — no real subjects or emails ever land in the
+  repo.
 
-When you wire up live API calls, mock the network with `vi.mock(
-'./services/redmineApi', …)` rather than introducing MSW, unless the
-contract complexity grows enough to justify it.
+When the frontend needs to mock a network module in a test, prefer
+`vi.mock('./services/redmineApi', …)` over MSW unless contract
+complexity grows enough to justify it.
 
 ## CI
 
