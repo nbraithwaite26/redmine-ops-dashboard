@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderKanban, Search } from 'lucide-react';
 import { getIssues, getProjects } from '../services/redmineApi';
+import { stripHtml } from '../lib/format';
 import type { Issue, Project, ProjectStatus } from '../types/redmine';
 
 const STATUS_OPTIONS: Array<'All' | ProjectStatus> = [
@@ -33,7 +34,7 @@ export default function AllProjects() {
       return (
         p.name.toLowerCase().includes(q) ||
         p.identifier.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q)
+        stripHtml(p.description).toLowerCase().includes(q)
       );
     });
   }, [projects, query, status]);
@@ -104,7 +105,7 @@ export default function AllProjects() {
               </div>
               <div className="mt-2 font-semibold">{p.name}</div>
               <div className="text-xs text-ink-muted">{p.identifier}</div>
-              <p className="text-sm text-ink-soft mt-2 line-clamp-2">{p.description}</p>
+              <p className="text-sm text-ink-soft mt-2 line-clamp-2">{stripHtml(p.description)}</p>
               <div className="flex items-center justify-between mt-3 text-xs text-ink-muted">
                 <span>{s.open} open / {s.total} total</span>
                 <span>Updated {p.updatedOn}</span>
