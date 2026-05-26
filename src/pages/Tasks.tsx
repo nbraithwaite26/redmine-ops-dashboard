@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import CreateIssueModal from '../components/CreateIssueModal';
@@ -32,7 +32,7 @@ export default function Tasks() {
   // reopen it because the URL still carries the id.
   const handledDeepLink = useRef(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const uid = currentUser?.id;
     const [m, all, u, te] = await Promise.all([
       getMyIssues(uid),
@@ -44,12 +44,12 @@ export default function Tasks() {
     setTeamIssues(uid === undefined ? all : all.filter((i) => i.assignee?.id !== uid));
     setUsers(u);
     setTimeEntries(te);
-  };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (userLoading) return;
     void load();
-  }, [userLoading, currentUser?.id]);
+  }, [userLoading, load]);
 
   // Honor ?id= once per visit: after the lists load, open that issue's
   // drawer. Clears the param so subsequent navigation away + back doesn't

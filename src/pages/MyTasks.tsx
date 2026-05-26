@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import IssueTable from '../components/IssueTable';
 import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
@@ -12,14 +12,14 @@ export default function MyTasks() {
   const [openIssue, setOpenIssue] = useState<Issue | null>(null);
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const data = await getMyIssues(currentUser?.id);
     setIssues(data);
-  };
+  }, [currentUser?.id]);
   useEffect(() => {
     if (userLoading) return;
     void load();
-  }, [userLoading, currentUser?.id]);
+  }, [userLoading, load]);
 
   return (
     <div className="space-y-4">
