@@ -266,6 +266,87 @@ export function deriveUsers(
   return Array.from(byId.values());
 }
 
+// ─── Team roster aggregation (issue-derived, range-independent) ───────────
+
+export interface TeamProjectRow {
+  projectId: number;
+  projectName: string;
+  /** Σ spentHours across the user's tasks in this project. */
+  spentHours: number;
+  /** Σ estimatedHours across the user's tasks in this project. */
+  estimatedHours: number;
+  /** Latest dueDate across the user's tasks in this project (or null). */
+  dueDate: string | null;
+  tasks: Issue[];
+}
+
+export interface TeamUserRow {
+  user: User;
+  projectCount: number;
+  taskCount: number;
+  spentHours: number;
+  estimatedHours: number;
+  projects: TeamProjectRow[];
+}
+
+/**
+ * Per-engineer roster derived purely from their assigned issues. Spent and
+ * expected (estimated) hours come from the issue fields themselves, so this
+ * is independent of any week range — it's the "overall" team view used by the
+ * Team Hours card/list (CR #18 item 8). Issues are expected to already be
+ * scoped (e.g. AIRCRAFT ENGINEERING) by the caller.
+ */
+export function aggregateTeamFromIssues(
+  users: ReadonlyArray<User>,
+  issues: ReadonlyArray<Issue>,
+): TeamUserRow[] {
+  const rows: TeamUserRow[] = [];
+  for (const user of users) {
+    const userIssues = issues.filter((i) => i.assignee?.id === user.id);
+    if (userIssues.length === 0) continue;
+
+    const byProject = new Map<number, TeamProjectRow>();
+    for (const issue of userIssues) {
+      let g = byProject.get(issue.projectId);
+      if (!g) {
+        g = {
+          projectId: issue.projectId,
+          projectName: issue.projectName,
+          spentHours: 0,
+          estimatedHours: 0,
+          dueDate: null,
+          tasks: [],
+        };
+        byProject.set(issue.projectId, g);
+      }
+      g.tasks.push(issue);
+      g.spentHours += issue.spentHours;
+      g.estimatedHours += issue.estimatedHours ?? 0;
+      if (issue.dueDate && (g.dueDate === null || issue.dueDate > g.dueDate)) {
+        g.dueDate = issue.dueDate;
+      }
+    }
+
+    const projects = Array.from(byProject.values()).sort((a, b) =>
+      a.projectName.localeCompare(b.projectName),
+    );
+    rows.push({
+      user,
+      projectCount: projects.length,
+      taskCount: userIssues.length,
+      spentHours: userIssues.reduce((s, i) => s + i.spentHours, 0),
+      estimatedHours: userIssues.reduce((s, i) => s + (i.estimatedHours ?? 0), 0),
+      projects,
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.spentHours !== a.spentHours) return b.spentHours - a.spentHours;
+    return a.user.name.localeCompare(b.user.name);
+  });
+  return rows;
+}
+
 // ─── Adapter (the only network-touching function) ────────────────────────
 
 /**

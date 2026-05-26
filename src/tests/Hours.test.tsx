@@ -32,16 +32,16 @@ describe('<Hours />', () => {
     expect(screen.getByTestId('hours-section--1')).toBeInTheDocument();
   });
 
-  it('renders the team schedule (Gantt) section', async () => {
+  it('renders the Team Hours section with a Card/List view selector', async () => {
     renderHours();
-    const gantt = await screen.findByTestId('team-gantt');
-    expect(gantt).toBeInTheDocument();
-    expect(within(gantt).getByText('Team schedule')).toBeInTheDocument();
-    // UserGantt mounts with an engineer selector and a select-first empty state.
-    await waitFor(() =>
-      expect(within(gantt).getByTestId('gantt-user-select')).toBeInTheDocument(),
-    );
-    expect(within(gantt).getByTestId('gantt-empty')).toBeInTheDocument();
+    const team = await screen.findByTestId('team-hours');
+    expect(team).toBeInTheDocument();
+    expect(within(team).getByText('Team schedule')).toBeInTheDocument();
+    // View selector defaults to Card.
+    await waitFor(() => {
+      const sel = within(team).getByTestId('team-hours-view') as HTMLSelectElement;
+      expect(sel.value).toBe('Card');
+    });
   });
 
   it('each section loads, then either renders user cards or an empty state', async () => {

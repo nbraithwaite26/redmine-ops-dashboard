@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AddTimeModal from '../components/AddTimeModal';
-import UserGantt from '../components/UserGantt';
+import TeamHours from '../components/TeamHours';
 import UserHoursCard from '../components/UserHoursCard';
 import UserHoursSection from '../components/UserHoursSection';
 import { useReadOnly } from '../hooks/useReadOnly';
@@ -41,15 +41,23 @@ export default function Hours() {
   // /users 403s for non-admin keys.
   const [ganttUsers, setGanttUsers] = useState<User[]>([]);
   const [ganttIssues, setGanttIssues] = useState<Issue[]>([]);
+  const [teamLoading, setTeamLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setTeamLoading(true);
     (async () => {
       const projects = await getProjects();
       const root = findProjectByPath(projects, DEFAULT_PROJECT_SOURCE.path);
       const { users, issues } = await getTeamSchedule(root?.id);
+      if (cancelled) return;
       setGanttUsers(users);
       setGanttIssues(issues);
+      setTeamLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [reloadKey]);
 
   return (
@@ -84,16 +92,13 @@ export default function Hours() {
         )}
       />
 
-      <section data-testid="team-gantt" className="space-y-2">
-        <div>
-          <h2 className="text-lg font-semibold">Team schedule</h2>
-          <p className="text-sm text-ink-muted">
-            Select an engineer to see their work, grouped by project and task.
-            Bars run start → due; tasks without both dates won't show a bar.
-          </p>
-        </div>
-        <UserGantt users={ganttUsers} issues={ganttIssues} />
-      </section>
+      <TeamHours
+        users={ganttUsers}
+        issues={ganttIssues}
+        loading={teamLoading}
+        readOnly={readOnly}
+        onLogTime={setLogTimeTarget}
+      />
 
       {logTimeTarget && (
         <AddTimeModal

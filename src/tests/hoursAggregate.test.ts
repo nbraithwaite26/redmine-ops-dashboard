@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregateHours,
+  aggregateTeamFromIssues,
   deriveUsers,
   entriesForIssue,
   maxDueDateIn,
@@ -122,6 +123,41 @@ describe('deriveUsers', () => {
 
   it('returns an empty list when there are no assignees or entries', () => {
     expect(deriveUsers([makeIssue(1, { assignee: null })], [])).toEqual([]);
+  });
+});
+
+describe('aggregateTeamFromIssues', () => {
+  const alice = makeUser(1, 'Alice');
+  const bob = makeUser(2, 'Bob');
+  const issues: Issue[] = [
+    makeIssue(10, { assignee: alice, projectId: 1, projectName: 'Alpha', estimatedHours: 8, spentHours: 4, dueDate: '2026-05-10' }),
+    makeIssue(11, { assignee: alice, projectId: 1, projectName: 'Alpha', estimatedHours: 12, spentHours: 6, dueDate: '2026-05-20' }),
+    makeIssue(12, { assignee: alice, projectId: 2, projectName: 'Beta', estimatedHours: 5, spentHours: 1 }),
+    makeIssue(13, { assignee: bob, projectId: 1, projectName: 'Alpha', estimatedHours: 2, spentHours: 10 }),
+  ];
+
+  it('rolls per-user spent/expected, project + task counts', () => {
+    const rows = aggregateTeamFromIssues([alice, bob], issues);
+    const aliceRow = rows.find((r) => r.user.id === 1)!;
+    expect(aliceRow.projectCount).toBe(2);
+    expect(aliceRow.taskCount).toBe(3);
+    expect(aliceRow.spentHours).toBe(11);
+    expect(aliceRow.estimatedHours).toBe(25);
+  });
+
+  it('per-project rollup keeps the latest due date and sums hours', () => {
+    const rows = aggregateTeamFromIssues([alice], issues);
+    const alpha = rows[0].projects.find((p) => p.projectId === 1)!;
+    expect(alpha.spentHours).toBe(10); // 4 + 6
+    expect(alpha.estimatedHours).toBe(20); // 8 + 12
+    expect(alpha.dueDate).toBe('2026-05-20'); // latest
+    expect(alpha.tasks).toHaveLength(2);
+  });
+
+  it('sorts by spent desc and skips users with no assigned issues', () => {
+    const carol = makeUser(3, 'Carol'); // no issues
+    const rows = aggregateTeamFromIssues([alice, bob, carol], issues);
+    expect(rows.map((r) => r.user.id)).toEqual([1, 2]); // Carol skipped; Alice (11) before Bob (10)
   });
 
   it('Sunday reference dates anchor to the prior Monday', () => {
