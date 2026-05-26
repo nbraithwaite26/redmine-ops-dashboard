@@ -13,7 +13,7 @@
  * touching the components.
  */
 
-import { getIssues, getTimeEntries, getUsers } from '../services/redmineApi';
+import { getIssues, getTimeEntries } from '../services/redmineApi';
 import { today } from './format';
 import type { Issue, TimeEntry, User } from '../types/redmine';
 
@@ -243,6 +243,29 @@ export function aggregateHours(
   return summaries;
 }
 
+/**
+ * Derive the engineer list from the data we actually have — issue assignees
+ * and time-entry authors — rather than `GET /users`.
+ *
+ * Why: the configured Redmine API key is not an admin, so `/users.json`
+ * 403s and the backend returns an empty list. Building the roster from
+ * assignees + entry authors means the Hours page (and anything consuming
+ * this) populates correctly without admin rights.
+ */
+export function deriveUsers(
+  issues: ReadonlyArray<Issue>,
+  entries: ReadonlyArray<TimeEntry>,
+): User[] {
+  const byId = new Map<number, User>();
+  for (const issue of issues) {
+    if (issue.assignee) byId.set(issue.assignee.id, issue.assignee);
+  }
+  for (const entry of entries) {
+    if (entry.user) byId.set(entry.user.id, entry.user);
+  }
+  return Array.from(byId.values());
+}
+
 // ─── Adapter (the only network-touching function) ────────────────────────
 
 /**
@@ -250,13 +273,16 @@ export function aggregateHours(
  * aggregated structure. This is the isolation point — if a future
  * `/api/redmine/hours-summary` endpoint lands, swap the body here and
  * the components stay identical.
+ *
+ * The roster is derived from assignees + entry authors (see deriveUsers)
+ * instead of `/users`, which 403s for the non-admin key.
  */
 export async function loadHoursData(range: WeekRange): Promise<HoursData> {
-  const [users, issues, entries] = await Promise.all([
-    getUsers(),
+  const [issues, entries] = await Promise.all([
     getIssues(),
     getTimeEntries({ from: range.from, to: range.to }),
   ]);
+  const users = deriveUsers(issues, entries);
   return {
     weekRange: range,
     users: aggregateHours(users, issues, entries, range),

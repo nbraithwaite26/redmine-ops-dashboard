@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregateHours,
+  deriveUsers,
   entriesForIssue,
   maxDueDateIn,
   weeklyHoursFor,
@@ -100,6 +101,27 @@ describe('weekRange', () => {
     // Locale-sensitive on day/month order; the test is light on format.
     expect(r.label).toMatch(/18/);
     expect(r.label).toMatch(/24/);
+  });
+});
+
+describe('deriveUsers', () => {
+  it('unions issue assignees and time-entry authors, de-duped by id', () => {
+    const issues: Issue[] = [
+      makeIssue(1, { assignee: makeUser(1, 'Alice') }),
+      makeIssue(2, { assignee: makeUser(2, 'Bob') }),
+      makeIssue(3, { assignee: null }),
+      makeIssue(4, { assignee: makeUser(1, 'Alice') }), // dup id 1
+    ];
+    const entries: TimeEntry[] = [
+      makeEntry(10, { user: makeUser(2, 'Bob') }), // already from issues
+      makeEntry(11, { user: makeUser(3, 'Carol') }), // entry-only user
+    ];
+    const ids = deriveUsers(issues, entries).map((u) => u.id).sort((a, b) => a - b);
+    expect(ids).toEqual([1, 2, 3]);
+  });
+
+  it('returns an empty list when there are no assignees or entries', () => {
+    expect(deriveUsers([makeIssue(1, { assignee: null })], [])).toEqual([]);
   });
 
   it('Sunday reference dates anchor to the prior Monday', () => {
