@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReorderableSection from '../components/ReorderableSection';
 import ResourceTimeline from '../components/ResourceTimeline';
-import { currentMockUser } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useSectionOrder } from '../hooks/useSectionOrder';
 import { getIssues, getResourceAllocations, getUsers } from '../services/redmineApi';
 import type { Issue, ResourceAllocation, User } from '../types/redmine';
@@ -16,7 +16,10 @@ interface SectionDef {
   id: string;
   title: string;
   subtitle?: string;
-  filter: (kind: { users: User[]; issues: Issue[]; allocations: ResourceAllocation[] }) => {
+  filter: (
+    kind: { users: User[]; issues: Issue[]; allocations: ResourceAllocation[] },
+    currentUserId: number | undefined,
+  ) => {
     users: User[];
     issues: Issue[];
     allocations: ResourceAllocation[];
@@ -28,11 +31,14 @@ const SECTIONS: SectionDef[] = [
     id: 'personal',
     title: 'Personal — my Gantt',
     subtitle: 'Your allocations across active projects.',
-    filter: ({ users, issues, allocations }) => ({
-      users: users.filter((u) => u.id === currentMockUser.id),
-      issues: issues.filter((i) => i.assignee?.id === currentMockUser.id),
-      allocations: allocations.filter((a) => a.userId === currentMockUser.id),
-    }),
+    filter: ({ users, issues, allocations }, currentUserId) => {
+      if (currentUserId === undefined) return { users, issues, allocations };
+      return {
+        users: users.filter((u) => u.id === currentUserId),
+        issues: issues.filter((i) => i.assignee?.id === currentUserId),
+        allocations: allocations.filter((a) => a.userId === currentUserId),
+      };
+    },
   },
   {
     id: 'team',
@@ -45,6 +51,7 @@ const SECTIONS: SectionDef[] = [
 const DEFAULT_ORDER = SECTIONS.map((s) => s.id);
 
 export default function ResourceManagement({ view }: Props) {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [users, setUsers] = useState<User[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [allocations, setAllocations] = useState<ResourceAllocation[]>([]);
@@ -55,6 +62,7 @@ export default function ResourceManagement({ view }: Props) {
   });
 
   useEffect(() => {
+    if (userLoading) return;
     (async () => {
       const [u, i, a] = await Promise.all([
         getUsers(),
@@ -65,7 +73,7 @@ export default function ResourceManagement({ view }: Props) {
       setIssues(i);
       setAllocations(a);
     })();
-  }, []);
+  }, [userLoading]);
 
   const visibleSections = useMemo(() => {
     if (view) return SECTIONS.filter((s) => s.id === view);
@@ -87,7 +95,7 @@ export default function ResourceManagement({ view }: Props) {
 
       <div className="space-y-4">
         {visibleSections.map((section, idx) => {
-          const filtered = section.filter({ users, issues, allocations });
+          const filtered = section.filter({ users, issues, allocations }, currentUser?.id);
           return (
             <ReorderableSection
               key={section.id}

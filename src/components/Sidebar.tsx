@@ -10,10 +10,12 @@ import {
   Library,
   ListTodo,
   Settings,
+  ShieldCheck,
   Timer,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
+import { useSession } from '../hooks/useSession';
 
 /**
  * Primary navigation rail. All top-level destinations live here — the
@@ -39,6 +41,8 @@ interface Props {
 }
 
 export default function Sidebar({ collapsed, onToggle }: Props) {
+  const { user, adminDisabled } = useSession();
+  const showAdmin = !adminDisabled && Boolean(user);
   return (
     <aside
       data-testid="primary-sidebar"
@@ -117,6 +121,23 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
           {!collapsed && <span className="truncate">{label}</span>}
         </NavLink>
       ))}
+      {showAdmin && (
+        <NavLink
+          to="/admin"
+          title={collapsed ? 'Admin' : undefined}
+          data-testid="sidebar-admin-link"
+          className={({ isActive }) =>
+            clsx(
+              'flex items-center gap-2 rounded-lg transition text-sm font-medium',
+              collapsed ? 'h-10 w-10 justify-center mx-auto' : 'h-9 px-2',
+              isActive ? 'sidebar-link-active' : 'sidebar-link',
+            )
+          }
+        >
+          <ShieldCheck size={18} className="shrink-0" />
+          {!collapsed && <span className="truncate">Admin</span>}
+        </NavLink>
+      )}
     </aside>
   );
 }

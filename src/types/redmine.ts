@@ -81,6 +81,7 @@ export interface Issue {
 export interface TimeEntry {
   id: number;
   projectId: number;
+  projectName?: string;
   issueId: number | null;
   user: User;
   activity: string;
@@ -123,6 +124,12 @@ export interface ConnectionSettings {
 export interface ConnectionStatus {
   connected: boolean;
   mockMode: boolean;
+  /**
+   * Whether the backend is in REDMINE_READ_ONLY mode. In mock mode this is
+   * always false. In real mode it reflects the backend's REDMINE_READ_ONLY
+   * env flag.
+   */
+  readOnly: boolean;
   lastSync: string | null;
   currentUser: User | null;
   message: string;

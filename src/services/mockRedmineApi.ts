@@ -52,6 +52,7 @@ export const mockRedmineApi: RedmineApi = {
       return wait({
         connected: true,
         mockMode: true,
+        readOnly: false,
         lastSync,
         currentUser: currentMockUser,
         message: 'Mock data mode active. No Redmine call was made.',
@@ -60,6 +61,7 @@ export const mockRedmineApi: RedmineApi = {
     return wait({
       connected: false,
       mockMode: false,
+      readOnly: false,
       lastSync,
       currentUser: null,
       message: 'Connection not configured. Set base URL and API key.',

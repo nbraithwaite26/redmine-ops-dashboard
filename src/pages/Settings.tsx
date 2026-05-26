@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Monitor, Moon, Save, Sun, Wifi } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Lock, Monitor, Moon, Sun } from 'lucide-react';
 import clsx from 'clsx';
-import {
-  getConnectionSettings,
-  saveConnectionSettings,
-  testConnection,
-} from '../services/redmineApi';
-import type { ConnectionSettings, ConnectionStatus } from '../types/redmine';
+import { testConnection } from '../services/redmineApi';
+import type { ConnectionStatus } from '../types/redmine';
 import { useTheme } from '../hooks/useTheme';
 import type { ThemeChoice } from '../hooks/useTheme';
 
@@ -16,36 +12,26 @@ const THEME_OPTIONS: Array<{ id: ThemeChoice; label: string; Icon: typeof Sun }>
   { id: 'system', label: 'System', Icon: Monitor },
 ];
 
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '/api/redmine').toString();
+const MOCK_MODE =
+  (import.meta.env.VITE_MOCK_MODE ?? 'true').toString().toLowerCase() !== 'false';
+
 export default function Settings() {
-  const [settings, setSettings] = useState<ConnectionSettings>({
-    baseUrl: '',
-    apiKey: '',
-    mockMode: true,
-  });
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [probing, setProbing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setSettings(await getConnectionSettings());
-      setStatus(await testConnection());
-    })();
-  }, []);
-
-  const onTest = async () => {
-    await saveConnectionSettings(settings);
-    setStatus(await testConnection());
-  };
-
-  const onSave = async () => {
-    setSaving(true);
+  const probe = async () => {
+    setProbing(true);
     try {
-      await saveConnectionSettings(settings);
       setStatus(await testConnection());
     } finally {
-      setSaving(false);
+      setProbing(false);
     }
   };
+
+  useEffect(() => {
+    void probe();
+  }, []);
 
   const { theme, setTheme, effectiveTheme } = useTheme();
 
@@ -54,7 +40,8 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-sm text-ink-muted">
-          API connection and appearance preferences.
+          Connection status and appearance preferences. API keys are managed
+          server-side and never exposed in the browser.
         </p>
       </div>
 
@@ -93,97 +80,116 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="card p-5 space-y-4">
-        <h2 className="font-semibold">Redmine connection</h2>
-
-        <label className="block text-sm">
-          <span className="text-xs text-ink-muted">Redmine Base URL</span>
-          <input
-            className="settings-input"
-            placeholder="https://redmine.example.com"
-            value={settings.baseUrl}
-            onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
-          />
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-xs text-ink-muted">API Key</span>
-          <input
-            type="password"
-            className="settings-input"
-            placeholder="Your Redmine API access key"
-            value={settings.apiKey}
-            onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
-          />
-          <div className="mt-1 text-xs text-orange-700 bg-orange-50 border border-orange-100 rounded p-2 flex items-start gap-2">
-            <AlertCircle size={14} className="mt-0.5" />
-            <div>
-              <strong>Security note:</strong> Do not ship a real API key in client-side
-              code. In production, route Redmine calls through a backend or serverless proxy
-              so the key isn't exposed and so CORS isn't a problem.
-            </div>
-          </div>
-        </label>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.mockMode}
-            onChange={(e) => setSettings({ ...settings, mockMode: e.target.checked })}
-          />
-          <span>Mock data mode (no real Redmine calls)</span>
-        </label>
-
-        <div className="flex items-center gap-2">
-          <button className="btn-secondary" onClick={onTest}>
-            <Wifi size={14} /> Test connection
-          </button>
-          <button className="btn-brand" onClick={onSave} disabled={saving}>
-            <Save size={14} /> Save connection
+      <section className="card p-5 space-y-4" data-testid="connection-section">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Connection</h2>
+          <button
+            className="btn-secondary text-xs"
+            onClick={probe}
+            disabled={probing}
+            data-testid="recheck-connection"
+          >
+            {probing ? 'Checking…' : 'Re-check'}
           </button>
         </div>
+
+        <p className="text-sm text-ink-muted">
+          The dashboard talks to a secure backend proxy that injects the
+          Redmine API key on the server. The browser never sees the key.
+        </p>
+
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <Row label="Mode" testid="row-mode">
+            {MOCK_MODE ? (
+              <span className="pill-yellow">Mock data</span>
+            ) : (
+              <span className="pill-green">Live Redmine</span>
+            )}
+          </Row>
+          <Row label="Backend endpoint" testid="row-api-base">
+            <code className="text-xs">{API_BASE}</code>
+          </Row>
+          <Row label="Backend reachable" testid="row-backend">
+            <Health ok={status?.connected === true || status?.mockMode === true} loading={!status} />
+          </Row>
+          <Row label="Redmine reachable" testid="row-redmine">
+            <Health ok={status?.connected === true || status?.mockMode === true} loading={!status} />
+          </Row>
+          <Row label="Read-only mode" testid="row-read-only">
+            {status?.readOnly ? (
+              <span className="inline-flex items-center gap-1 pill-blue">
+                <Lock size={12} /> Read-only
+              </span>
+            ) : (
+              <span className="text-ink-muted">Writes allowed</span>
+            )}
+          </Row>
+          <Row label="Current user" testid="row-current-user">
+            <span className="font-medium text-ink">
+              {status?.currentUser?.name ?? '—'}
+            </span>
+          </Row>
+          <Row label="Last sync" testid="row-last-sync">
+            <span className="text-ink-soft">{status?.lastSync ?? 'Never'}</span>
+          </Row>
+          <Row label="Message" testid="row-message" wide>
+            <span className="text-ink-soft">{status?.message ?? 'Loading…'}</span>
+          </Row>
+        </dl>
       </section>
 
-      <section className="card p-5">
-        <h2 className="font-semibold mb-3">Sync status</h2>
-        {status ? (
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              {status.connected || status.mockMode ? (
-                <CheckCircle2 size={16} className="text-green-600" />
-              ) : (
-                <AlertCircle size={16} className="text-red-600" />
-              )}
-              <span>{status.message}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="text-xs text-ink-muted">Last sync</div>
-                <div>{status.lastSync ?? 'Never'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-ink-muted">Current user</div>
-                <div>{status.currentUser?.name ?? '—'}</div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-ink-muted">Loading…</div>
-        )}
-      </section>
-
-      <section className="card p-5 text-sm">
-        <h2 className="font-semibold mb-2">Notes for live integration</h2>
+      <section className="card p-5 text-sm space-y-2">
+        <h2 className="font-semibold">How this works</h2>
         <ul className="list-disc pl-5 space-y-1 text-ink-soft">
-          <li>Real Redmine REST API requires an <code>X-Redmine-API-Key</code> header. Don't
-            send this from the browser.</li>
-          <li>Add a thin backend service that injects the API key and exposes the same
-            shape this UI already calls.</li>
-          <li>Consider caching project / user / status metadata to keep dashboard loads
-            snappy.</li>
+          <li>
+            The API key lives only in <code>.env.local</code> on the backend
+            host (gitignored). The browser never receives it.
+          </li>
+          <li>
+            Every request goes through <code>{API_BASE}/*</code> → backend
+            proxy → Redmine. CORS and credentials stay server-side.
+          </li>
+          <li>
+            <code>REDMINE_READ_ONLY=true</code> in backend env blocks every
+            non-GET request with <code>403 READ_ONLY</code>.
+          </li>
         </ul>
       </section>
-
     </div>
+  );
+}
+
+function Row({
+  label,
+  children,
+  testid,
+  wide,
+}: {
+  label: string;
+  children: React.ReactNode;
+  testid?: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'sm:col-span-2' : undefined} data-testid={testid}>
+      <dt className="text-xs text-ink-muted mb-1">{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+function Health({ ok, loading }: { ok: boolean; loading: boolean }) {
+  if (loading) return <span className="text-ink-muted">Checking…</span>;
+  if (ok) {
+    return (
+      <span className="inline-flex items-center gap-1 text-green-700">
+        <CheckCircle2 size={14} /> OK
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-red-700">
+      <AlertCircle size={14} /> Unreachable
+    </span>
   );
 }

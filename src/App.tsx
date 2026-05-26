@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './components/AppShell';
+import RequireAdmin from './components/RequireAdmin';
 import Dashboard from './pages/Dashboard';
 import MyTasks from './pages/MyTasks';
 import Tasks from './pages/Tasks';
@@ -17,8 +18,16 @@ import Calendar from './pages/Calendar';
 import Hours from './pages/Hours';
 import MyHours from './pages/MyHours';
 import TeamHours from './pages/TeamHours';
+import Login from './pages/Login';
+import Admin from './pages/Admin';
 
 export default function App() {
+  const location = useLocation();
+  // /login renders standalone (no AppShell sidebar/topbar).
+  if (location.pathname === '/login') {
+    return <Login />;
+  }
+
   return (
     <AppShell>
       <Routes>
@@ -55,6 +64,16 @@ export default function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/directory" element={<Directory />} />
         <Route path="/settings" element={<Settings />} />
+
+        <Route
+          path="/admin"
+          element={
+            <RequireAdmin>
+              <Admin />
+            </RequireAdmin>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

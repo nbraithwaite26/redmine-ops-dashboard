@@ -23,7 +23,8 @@ import {
   getTeamHours,
   getWeeklyHours,
 } from '../services/redmineApi';
-import { buildDashboardMetrics, currentMockUser } from '../data/mockData';
+import { buildDashboardMetrics } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 const recentlyOpenedWorkspaces: RecentItem[] = [
   { id: 'my-tasks', title: 'My Tasks', type: 'Workspace', description: 'Assigned task queue.', to: '/tasks' },
@@ -66,6 +67,7 @@ const HOME_METRIC_IDS = new Set([
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [myIssues, setMyIssues] = useState<Issue[]>([]);
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
@@ -73,12 +75,14 @@ export default function Home() {
   const [team, setTeam] = useState({ logged: 0, target: 360 });
 
   useEffect(() => {
+    if (userLoading) return;
     (async () => {
+      // currentUser?.id is undefined → backend defaults to "me" (the API key holder)
       const [m, a, pd, w, t] = await Promise.all([
-        getMyIssues(currentMockUser.id),
+        getMyIssues(currentUser?.id),
         getIssues(),
         getPastDueIssues(),
-        getWeeklyHours(),
+        getWeeklyHours(currentUser?.id),
         getTeamHours(),
       ]);
       setMyIssues(m);
@@ -87,7 +91,7 @@ export default function Home() {
       setWeekly(w);
       setTeam(t);
     })();
-  }, []);
+  }, [userLoading, currentUser?.id]);
 
   const headlineMetrics = buildDashboardMetrics({
     myIssues,
@@ -110,7 +114,9 @@ export default function Home() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-sm text-brand">Welcome back,</p>
-            <h1 className="text-3xl font-semibold mt-1">{currentMockUser.name}</h1>
+            <h1 className="text-3xl font-semibold mt-1">
+              {userLoading ? '…' : currentUser?.name ?? 'Guest'}
+            </h1>
             <p className="text-sm text-white/70 mt-1 max-w-lg">
               Here's your operational view across projects, tasks, and the team. Pick up
               where you left off below, or jump straight into the dashboard.

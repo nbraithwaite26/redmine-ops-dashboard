@@ -4,25 +4,29 @@ import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
 import type { Issue } from '../types/redmine';
 import { getMyIssues } from '../services/redmineApi';
-import { currentMockUser } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export default function MyTasks() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [openIssue, setOpenIssue] = useState<Issue | null>(null);
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
 
   const load = async () => {
-    const data = await getMyIssues(currentMockUser.id);
+    const data = await getMyIssues(currentUser?.id);
     setIssues(data);
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (userLoading) return;
+    void load();
+  }, [userLoading, currentUser?.id]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My Tasks</h1>
         <div className="text-xs text-ink-muted">
-          Signed in as <span className="font-medium text-ink">{currentMockUser.name}</span>
+          {userLoading ? '…' : <>Signed in as <span className="font-medium text-ink">{currentUser?.name ?? 'Guest'}</span></>}
         </div>
       </div>
       <IssueTable

@@ -10,7 +10,7 @@ function LocationProbe() {
 }
 
 describe('<Home /> Codex-style landing', () => {
-  it('renders the slate gradient hero with the personalized greeting', () => {
+  it('renders the slate gradient hero with the personalized greeting', async () => {
     render(
       <MemoryRouter>
         <Home />
@@ -19,7 +19,9 @@ describe('<Home /> Codex-style landing', () => {
     const hero = screen.getByTestId('home-hero');
     expect(hero).toBeInTheDocument();
     expect(hero).toHaveTextContent('Welcome back,');
-    expect(hero).toHaveTextContent(currentMockUser.name);
+    // Greeting is hydrated from getCurrentUser() which is async in real
+    // mode and synchronous-ish in mock mode. Wait for it.
+    await waitFor(() => expect(hero).toHaveTextContent(currentMockUser.name));
   });
 
   it('hero includes a workspace selector with at least the Ops option', () => {

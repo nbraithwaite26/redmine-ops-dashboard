@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ClipboardList,
   HelpCircle,
+  Lock,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -17,7 +18,10 @@ import type { EffectiveTheme } from '../hooks/useTheme';
 interface Props {
   apiConnected: boolean;
   mockMode: boolean;
+  readOnly?: boolean;
   isSyncing: boolean;
+  /** Epoch ms of the last successful sync, or null if none yet. */
+  lastSyncAt?: number | null;
   onClickSync: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
@@ -28,7 +32,9 @@ interface Props {
 export default function TopBar({
   apiConnected,
   mockMode,
+  readOnly = false,
   isSyncing,
+  lastSyncAt = null,
   onClickSync,
   sidebarCollapsed,
   onToggleSidebar,
@@ -129,6 +135,15 @@ export default function TopBar({
           <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
           <span>{isSyncing ? 'Syncing…' : 'Sync with Redmine'}</span>
         </button>
+        {lastSyncAt !== null && (
+          <span
+            className="pill bg-white/20 text-xs"
+            title={new Date(lastSyncAt).toLocaleString()}
+            data-testid="last-sync-chip"
+          >
+            Last sync {formatRelativeTime(lastSyncAt)}
+          </span>
+        )}
         <span
           className={
             apiConnected
@@ -141,6 +156,15 @@ export default function TopBar({
         >
           {apiConnected ? 'Connected' : mockMode ? 'Mock mode' : 'Not connected'}
         </span>
+        {readOnly && (
+          <span
+            className="pill bg-blue-200 text-blue-900 inline-flex items-center gap-1"
+            title="Backend is in read-only mode — writes are disabled."
+            data-testid="read-only-badge"
+          >
+            <Lock size={12} /> Read-only
+          </span>
+        )}
         <ThemeToggle
           effectiveTheme={effectiveTheme}
           onToggle={onToggleTheme}
@@ -169,4 +193,15 @@ export default function TopBar({
       </div>
     </header>
   );
+}
+
+function formatRelativeTime(at: number): string {
+  const delta = Date.now() - at;
+  if (delta < 60_000) return 'just now';
+  const minutes = Math.floor(delta / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

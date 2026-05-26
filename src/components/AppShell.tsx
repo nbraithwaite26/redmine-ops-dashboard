@@ -8,13 +8,40 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
 import { useSyncBanner } from '../hooks/useSyncBanner';
 import { useTheme } from '../hooks/useTheme';
+import { useReadOnly } from '../hooks/useReadOnly';
 import { getConnectionSettings, getCurrentUser, syncWithRedmine } from '../services/redmineApi';
+import { postSyncEvent } from '../services/adminApi';
 
 const ROUTES_WITHOUT_RIGHT_PANEL = new Set(['/resources', '/resources/personal', '/resources/team', '/project-builder', '/settings']);
+
+const LAST_SYNC_KEY = 'redmine-ops:last-sync-at';
+
+function readLastSync(): number | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = window.localStorage.getItem(LAST_SYNC_KEY);
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastSync(at: number) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LAST_SYNC_KEY, String(at));
+  } catch {
+    /* ignore quota */
+  }
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [apiConnected, setApiConnected] = useState(false);
   const [mockMode, setMockMode] = useState(true);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(readLastSync);
+  const { readOnly } = useReadOnly();
   const location = useLocation();
   const { banner, status, beginSync, reportSuccess, reportError } = useSyncBanner({
     mockMode,
@@ -59,11 +86,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleSync = async () => {
     beginSync();
+    const startedAt = Date.now();
     try {
       await syncWithRedmine();
+      const now = Date.now();
+      setLastSyncAt(now);
+      writeLastSync(now);
       reportSuccess();
+      // Best-effort audit record. Mock mode short-circuits to ok in adminApi.
+      void postSyncEvent({
+        trigger: 'manual',
+        status: 'success',
+        durationMs: now - startedAt,
+      }).catch(() => {
+        /* sync-events recording is best-effort */
+      });
     } catch (err) {
-      reportError(err instanceof Error ? err.message : 'Unknown error');
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      reportError(message);
+      void postSyncEvent({
+        trigger: 'manual',
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+        errorMessage: message,
+      }).catch(() => {
+        /* sync-events recording is best-effort */
+      });
     }
   };
 
@@ -81,7 +129,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <TopBar
           apiConnected={apiConnected}
           mockMode={mockMode}
+          readOnly={readOnly}
           isSyncing={isSyncing}
+          lastSyncAt={lastSyncAt}
           onClickSync={handleSync}
           sidebarCollapsed={collapsed}
           onToggleSidebar={toggle}

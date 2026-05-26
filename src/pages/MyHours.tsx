@@ -1,27 +1,35 @@
 import { useEffect, useState } from 'react';
 import DonutChart from '../components/DonutChart';
-import { currentMockUser, mockProjects } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getTimeEntries, getWeeklyHours } from '../services/redmineApi';
 import type { TimeEntry } from '../types/redmine';
 
 export default function MyHours() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [my, setMy] = useState({ logged: 0, target: 40 });
 
   useEffect(() => {
+    if (userLoading) return;
     (async () => {
-      const [te, w] = await Promise.all([getTimeEntries(), getWeeklyHours()]);
-      setEntries(te.filter((t) => t.user.id === currentMockUser.id));
+      const [te, w] = await Promise.all([
+        getTimeEntries(),
+        getWeeklyHours(currentUser?.id),
+      ]);
+      const filtered = currentUser
+        ? te.filter((t) => t.user.id === currentUser.id)
+        : te;
+      setEntries(filtered);
       setMy(w);
     })();
-  }, []);
+  }, [userLoading, currentUser?.id]);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">My hours this week</h1>
         <p className="text-sm text-ink-muted">
-          Signed in as {currentMockUser.name}.
+          {userLoading ? '…' : `Signed in as ${currentUser?.name ?? 'Guest'}.`}
         </p>
       </div>
 
@@ -53,11 +61,10 @@ export default function MyHours() {
           </thead>
           <tbody>
             {entries.map((e) => {
-              const proj = mockProjects.find((p) => p.id === e.projectId);
               return (
                 <tr key={e.id} className="border-t border-gray-100 hover:bg-canvas/60">
                   <td className="px-3 py-2">{e.spentOn}</td>
-                  <td className="px-3 py-2">{proj?.name ?? '—'}</td>
+                  <td className="px-3 py-2">{e.projectName ?? '—'}</td>
                   <td className="px-3 py-2">
                     {e.issueId ? <a className="link" href={`#/tasks?id=${e.issueId}`}>#{e.issueId}</a> : '—'}
                   </td>

@@ -12,12 +12,14 @@ import {
   getTeamHours,
   getWeeklyHours,
 } from '../services/redmineApi';
-import { buildDashboardMetrics, currentMockUser } from '../data/mockData';
+import { buildDashboardMetrics } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 const TABS = ['Your Work', "Your Team's Work", 'Project Health', 'Resource Planning'];
 
 export default function Dashboard() {
   const [tab, setTab] = useState(TABS[0]);
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [myIssues, setMyIssues] = useState<Issue[]>([]);
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
@@ -26,12 +28,12 @@ export default function Dashboard() {
   const [openIssue, setOpenIssue] = useState<Issue | null>(null);
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
 
-  const load = async () => {
+  const load = async (uid: number | undefined) => {
     const [m, a, pd, w, t] = await Promise.all([
-      getMyIssues(currentMockUser.id),
+      getMyIssues(uid),
       getIssues(),
       getPastDueIssues(),
-      getWeeklyHours(),
+      getWeeklyHours(uid),
       getTeamHours(),
     ]);
     setMyIssues(m);
@@ -41,7 +43,10 @@ export default function Dashboard() {
     setTeam(t);
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (userLoading) return;
+    void load(currentUser?.id);
+  }, [userLoading, currentUser?.id]);
 
   const metrics = buildDashboardMetrics({
     myIssues,
@@ -105,7 +110,7 @@ export default function Dashboard() {
           issues={myIssues}
           onOpenIssue={setOpenIssue}
           onQuickEdit={setQuickIssue}
-          onRefresh={load}
+          onRefresh={() => void load(currentUser?.id)}
         />
       </div>
 
@@ -114,7 +119,7 @@ export default function Dashboard() {
           issue={quickIssue}
           onClose={() => setQuickIssue(null)}
           onSaved={() => {
-            void load();
+            void load(currentUser?.id);
           }}
           onOpenFullEditor={(i) => {
             setQuickIssue(null);
@@ -128,7 +133,7 @@ export default function Dashboard() {
           onClose={() => setOpenIssue(null)}
           onSaved={() => {
             setOpenIssue(null);
-            void load();
+            void load(currentUser?.id);
           }}
           onQuickEdit={(i) => {
             setOpenIssue(null);

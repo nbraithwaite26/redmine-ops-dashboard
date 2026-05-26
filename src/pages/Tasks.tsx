@@ -3,7 +3,7 @@ import GroupedTaskTable from '../components/GroupedTaskTable';
 import IssueTable from '../components/IssueTable';
 import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
-import { currentMockUser } from '../data/mockData';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import {
   getIssues,
   getMyIssues,
@@ -13,6 +13,7 @@ import {
 import type { Issue, TimeEntry, User } from '../types/redmine';
 
 export default function Tasks() {
+  const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [myIssues, setMyIssues] = useState<Issue[]>([]);
   const [teamIssues, setTeamIssues] = useState<Issue[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -21,21 +22,23 @@ export default function Tasks() {
   const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
 
   const load = async () => {
+    const uid = currentUser?.id;
     const [m, all, u, te] = await Promise.all([
-      getMyIssues(currentMockUser.id),
+      getMyIssues(uid),
       getIssues(),
       getUsers(),
       getTimeEntries(),
     ]);
     setMyIssues(m);
-    setTeamIssues(all.filter((i) => i.assignee?.id !== currentMockUser.id));
+    setTeamIssues(uid === undefined ? all : all.filter((i) => i.assignee?.id !== uid));
     setUsers(u);
     setTimeEntries(te);
   };
 
   useEffect(() => {
+    if (userLoading) return;
     void load();
-  }, []);
+  }, [userLoading, currentUser?.id]);
 
   return (
     <div className="space-y-5">
@@ -60,11 +63,13 @@ export default function Tasks() {
       <section className="card overflow-hidden">
         <GroupedTaskTable
           title="Team tasks (this week)"
-          users={users.filter((u) => u.id !== currentMockUser.id)}
+          users={currentUser ? users.filter((u) => u.id !== currentUser.id) : users}
           issues={teamIssues}
-          timeEntries={timeEntries.filter(
-            (t) => t.user.id !== currentMockUser.id,
-          )}
+          timeEntries={
+            currentUser
+              ? timeEntries.filter((t) => t.user.id !== currentUser.id)
+              : timeEntries
+          }
         />
       </section>
 

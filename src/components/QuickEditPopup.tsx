@@ -9,6 +9,7 @@ import {
 } from '../data/mockData';
 import { createTimeEntry, updateIssue } from '../services/redmineApi';
 import { useDialogA11y } from '../hooks/useDialogA11y';
+import { useReadOnly } from '../hooks/useReadOnly';
 
 interface Props {
   issue: Issue;
@@ -33,6 +34,7 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
     spentOn: new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
+  const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
 
@@ -234,14 +236,16 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
             <button
               className="btn-secondary"
               onClick={() => save(true)}
-              disabled={saving}
+              disabled={saving || readOnly}
+              title={readOnly ? 'Read-only mode — writes disabled' : undefined}
             >
               <CalendarClock size={14} /> Save and log time
             </button>
             <button
               className="btn-brand"
               onClick={() => save(false)}
-              disabled={saving}
+              disabled={saving || readOnly}
+              title={readOnly ? 'Read-only mode — writes disabled' : undefined}
             >
               <Save size={14} /> Save quick edit
             </button>

@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { useDialogA11y } from '../hooks/useDialogA11y';
-import type { Issue, IssuePriority, IssueStatus, Tracker } from '../types/redmine';
+import type { CustomField, Issue, IssuePriority, IssueStatus, Tracker } from '../types/redmine';
 import {
   mockIssueStatuses,
   mockPriorities,
@@ -19,6 +19,7 @@ import {
   mockUsers,
 } from '../data/mockData';
 import { updateIssue } from '../services/redmineApi';
+import { useReadOnly } from '../hooks/useReadOnly';
 
 interface Props {
   issue: Issue;
@@ -30,6 +31,7 @@ interface Props {
 export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: Props) {
   const [draft, setDraft] = useState<Issue>(issue);
   const [saving, setSaving] = useState(false);
+  const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
 
@@ -243,10 +245,7 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
           </Section>
 
           <Section title="Custom fields">
-            <div className="text-xs text-ink-muted">
-              No custom fields configured for this tracker. Wire up real custom fields once
-              the Redmine API is connected.
-            </div>
+            <CustomFields fields={draft.customFields} />
           </Section>
 
           <Section title="Attachments">
@@ -291,7 +290,12 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
           </div>
           <div className="flex items-center gap-2">
             <button className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="btn-brand" onClick={save} disabled={saving}>
+            <button
+              className="btn-brand"
+              onClick={save}
+              disabled={saving || readOnly}
+              title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+            >
               <Save size={14} /> Save changes
             </button>
           </div>
@@ -328,4 +332,41 @@ function F({
       {children}
     </label>
   );
+}
+
+const MOCK_MODE =
+  (import.meta.env.VITE_MOCK_MODE ?? 'true').toString().toLowerCase() !== 'false';
+
+function CustomFields({ fields }: { fields: CustomField[] }) {
+  if (fields.length > 0) {
+    return (
+      <dl
+        className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm"
+        data-testid="custom-fields-list"
+      >
+        {fields.map((f) => (
+          <div key={f.id} className="flex flex-col">
+            <dt className="text-xs text-ink-muted">{f.name}</dt>
+            <dd className="text-ink">{formatCustomFieldValue(f.value)}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+  return (
+    <div
+      className="text-xs text-ink-muted"
+      data-testid="custom-fields-empty"
+    >
+      {MOCK_MODE
+        ? 'No custom fields configured for this tracker.'
+        : 'No custom fields set on this issue. The catalog is sampled from recent issues — /custom_fields.json is admin-only and may not surface every field defined in Redmine.'}
+    </div>
+  );
+}
+
+function formatCustomFieldValue(v: CustomField['value']): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  return String(v);
 }
