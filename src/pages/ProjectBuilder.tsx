@@ -130,7 +130,8 @@ export default function ProjectBuilder() {
             </button>
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="overflow-x-auto">
+        <div className="space-y-2 min-w-[680px]">
           {tasks.map((t) => (
             <div
               key={t.id}
@@ -202,6 +203,7 @@ export default function ProjectBuilder() {
               </div>
             </div>
           ))}
+        </div>
         </div>
       </section>
 

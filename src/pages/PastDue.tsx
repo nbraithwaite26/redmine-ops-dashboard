@@ -34,7 +34,7 @@ export default function PastDue() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <AlertTriangle className="text-red-500" /> Past Due Tasks
@@ -43,11 +43,11 @@ export default function PastDue() {
             {issues.length} task{issues.length === 1 ? '' : 's'} past their due date
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-sm min-w-0">
           <select
             value={assignee}
             onChange={(e) => setAssignee(e.target.value)}
-            className="border border-gray-200 bg-white rounded px-2 py-1"
+            className="border border-gray-200 bg-white rounded px-2 py-1 max-w-[44vw] sm:max-w-[200px] truncate"
           >
             <option value="All">All assignees</option>
             {assignees.map((a) => (
@@ -57,7 +57,7 @@ export default function PastDue() {
           <select
             value={project}
             onChange={(e) => setProject(e.target.value)}
-            className="border border-gray-200 bg-white rounded px-2 py-1"
+            className="border border-gray-200 bg-white rounded px-2 py-1 max-w-[44vw] sm:max-w-[200px] truncate"
           >
             <option value="All">All projects</option>
             {projects.map((p) => (

@@ -100,6 +100,9 @@ body {
   /* Allow the document to scroll naturally instead of forcing per-panel
      internal scroll. Sidebars become sticky via the AppShell. */
   overflow-y: auto;
+  /* Backstop against accidental horizontal overflow (e.g. a wide control or
+     a long unbreakable string). Vertical sticky positioning is unaffected. */
+  overflow-x: hidden;
 }
 
 body {

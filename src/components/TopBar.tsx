@@ -55,10 +55,10 @@ export default function TopBar({
         backgroundColor: 'var(--brand-surface)',
         color: 'var(--brand-surface-text)',
       }}
-      className="h-14 flex items-center px-4 gap-4 border-b border-brand-500/40"
+      className="h-14 flex items-center px-3 md:px-4 gap-2 md:gap-4 border-b border-brand-500/40 overflow-x-hidden"
       role="banner"
     >
-      <div className="flex items-center gap-2 min-w-[260px]">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={onToggleSidebar}
           aria-label="Toggle sidebar"
@@ -96,32 +96,33 @@ export default function TopBar({
             }
           />
         )}
-        <div className="font-semibold tracking-tight">Aircraft Engineering Redmine</div>
+        <div className="font-semibold tracking-tight hidden sm:block truncate">Aircraft Engineering Redmine</div>
       </div>
 
-      <nav className="flex items-center gap-1 text-sm font-medium">
+      {/* Secondary nav — hidden on smaller screens to free horizontal space. */}
+      <nav className="hidden lg:flex items-center gap-1 text-sm font-medium shrink-0">
         <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">All</button>
         <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">Favorites</button>
         <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">History</button>
         <button className="px-3 py-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]">Workspaces</button>
       </nav>
 
-      <div className="flex-1 flex justify-center">
-        <div className="bg-white/95 rounded-full px-3 py-1.5 flex items-center gap-2 w-[440px] max-w-full shadow-sm">
-          <span className="px-2 py-0.5 rounded-full bg-brand-100 text-ink text-xs font-medium">
+      <div className="flex-1 flex justify-center min-w-0">
+        <div className="bg-white/95 rounded-full px-3 py-1.5 flex items-center gap-2 w-full max-w-[440px] min-w-0 shadow-sm">
+          <span className="hidden md:inline-block px-2 py-0.5 rounded-full bg-brand-100 text-ink text-xs font-medium whitespace-nowrap">
             Service Operations Workspace
           </span>
-          <Search size={14} className="text-ink-muted" />
+          <Search size={14} className="text-ink-muted shrink-0" />
           <input
-            className="bg-transparent outline-none text-sm flex-1 placeholder:text-ink-muted text-ink"
+            className="bg-transparent outline-none text-sm flex-1 min-w-0 placeholder:text-ink-muted text-ink"
             placeholder="Search issues, projects, people…"
             aria-label="Global search"
           />
-          <ChevronDown size={14} className="text-ink-muted" />
+          <ChevronDown size={14} className="text-ink-muted shrink-0 hidden md:block" />
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 md:gap-2 shrink-0">
         <button
           onClick={onClickSync}
           disabled={isSyncing}
@@ -133,11 +134,11 @@ export default function TopBar({
           aria-label="Sync with Redmine"
         >
           <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-          <span>{isSyncing ? 'Syncing…' : 'Sync with Redmine'}</span>
+          <span className="hidden sm:inline">{isSyncing ? 'Syncing…' : 'Sync with Redmine'}</span>
         </button>
         {lastSyncAt !== null && (
           <span
-            className="pill bg-white/20 text-xs"
+            className="pill bg-white/20 text-xs hidden lg:inline-flex"
             title={new Date(lastSyncAt).toLocaleString()}
             data-testid="last-sync-chip"
           >
@@ -146,11 +147,12 @@ export default function TopBar({
         )}
         <span
           className={
-            apiConnected
+            'hidden md:inline-flex ' +
+            (apiConnected
               ? 'pill bg-green-200 text-green-900'
               : mockMode
               ? 'pill bg-orange-200 text-orange-900'
-              : 'pill bg-red-200 text-red-900'
+              : 'pill bg-red-200 text-red-900')
           }
           title="API connection status"
         >
@@ -158,7 +160,7 @@ export default function TopBar({
         </span>
         {readOnly && (
           <span
-            className="pill bg-blue-200 text-blue-900 inline-flex items-center gap-1"
+            className="pill bg-blue-200 text-blue-900 hidden md:inline-flex items-center gap-1"
             title="Backend is in read-only mode — writes are disabled."
             data-testid="read-only-badge"
           >
@@ -170,13 +172,13 @@ export default function TopBar({
           onToggle={onToggleTheme}
           className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]"
         />
-        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Help">
+        <button className="hidden lg:inline-flex p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Help">
           <HelpCircle size={18} />
         </button>
-        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Notifications">
+        <button className="hidden lg:inline-flex p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Notifications">
           <Bell size={18} />
         </button>
-        <button className="p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Settings">
+        <button className="hidden lg:inline-flex p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Settings">
           <SettingsIcon size={18} />
         </button>
         <button className="p-1 rounded-full transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="User menu">
