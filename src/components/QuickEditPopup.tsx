@@ -10,7 +10,7 @@ import {
 import { createTimeEntry } from '../services/redmineApi';
 import { useDialogA11y } from '../hooks/useDialogA11y';
 import { useReadOnly } from '../hooks/useReadOnly';
-import { useSaveIssue } from '../hooks/useSaveIssue';
+import { useIssueActions } from '../hooks/useIssueActions';
 
 interface Props {
   issue: Issue;
@@ -34,7 +34,7 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
     comments: '',
     spentOn: new Date().toISOString().slice(0, 10),
   });
-  const { saving, save: saveIssue } = useSaveIssue();
+  const { saving, save: saveIssue } = useIssueActions();
   const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);

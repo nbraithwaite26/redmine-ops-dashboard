@@ -321,8 +321,37 @@ export const realRedmineApi: RedmineApi = {
     }
   },
 
-  async createIssue(): Promise<Issue> {
-    notImplementedWrite('createIssue');
+  async createIssue(input: Partial<Issue>): Promise<Issue> {
+    // Backend requires projectId + subject. Surface a clear error if
+    // either is missing rather than letting the backend echo a generic
+    // BAD_REQUEST.
+    if (input.projectId === undefined) {
+      throw new HttpError(400, 'BAD_REQUEST', 'createIssue requires projectId.');
+    }
+    if (!input.subject) {
+      throw new HttpError(400, 'BAD_REQUEST', 'createIssue requires subject.');
+    }
+    const body: Record<string, unknown> = {
+      projectId: input.projectId,
+      subject: input.subject,
+    };
+    if (input.description !== undefined) body.description = input.description;
+    if (input.status !== undefined) body.status = input.status;
+    if (input.priority !== undefined) body.priority = input.priority;
+    if (input.tracker !== undefined) body.tracker = input.tracker;
+    if ('assignee' in input) body.assignedToId = input.assignee?.id ?? null;
+    if (input.startDate !== undefined) body.startDate = input.startDate;
+    if (input.dueDate !== undefined) body.dueDate = input.dueDate;
+    if (input.estimatedHours !== undefined) body.estimatedHours = input.estimatedHours;
+    if (input.doneRatio !== undefined) body.doneRatio = input.doneRatio;
+    if ('parentIssueId' in input) body.parentIssueId = input.parentIssueId;
+
+    const created = await httpJson<Issue>('POST', '/issues', body);
+    // List endpoints are stale now.
+    for (const key of cache.keys()) {
+      if (key.startsWith('/issues')) cache.delete(key);
+    }
+    return created;
   },
   async updateIssue(id: number, patch: Partial<Issue>): Promise<Issue> {
     // Build a curated patch body matching the backend's PATCH allowlist.
@@ -354,17 +383,31 @@ export const realRedmineApi: RedmineApi = {
     clearIssueCacheFor(id);
     return updated;
   },
-  async deleteIssue(): Promise<{ id: number }> {
-    notImplementedWrite('deleteIssue');
+  async deleteIssue(id: number): Promise<{ id: number }> {
+    const result = await httpJson<{ id: number }>('DELETE', `/issues/${id}`);
+    clearIssueCacheFor(id);
+    return result;
   },
-  async addIssueComment(): Promise<{ id: number }> {
-    notImplementedWrite('addIssueComment');
+  async addIssueComment(id: number, comment: string): Promise<{ id: number }> {
+    // Redmine attaches a comment as a journal entry on PUT /issues/:id.json
+    // with a `notes` field. Our backend PATCH allowlist already supports it.
+    await httpJson<Issue>('PATCH', `/issues/${id}`, { notes: comment });
+    clearIssueCacheFor(id);
+    return { id };
   },
-  async addSubtask(): Promise<Issue> {
-    notImplementedWrite('addSubtask');
+  async addSubtask(parentId: number, input: Partial<Issue>): Promise<Issue> {
+    // Subtasks are issues with parent_issue_id set. Route through createIssue
+    // so the same validation + cache invalidation applies.
+    const child = await this.createIssue({ ...input, parentIssueId: parentId });
+    // The parent's children[] is now stale; drop its detail entry.
+    clearIssueCacheFor(parentId);
+    return child;
   },
-  async updateIssueHierarchy(): Promise<Issue> {
-    notImplementedWrite('updateIssueHierarchy');
+  async updateIssueHierarchy(id: number, parentId: number | null): Promise<Issue> {
+    const updated = await httpJson<Issue>('PATCH', `/issues/${id}`, { parentIssueId: parentId });
+    clearIssueCacheFor(id);
+    if (parentId !== null) clearIssueCacheFor(parentId);
+    return updated;
   },
 
   async getTimeEntries(): Promise<TimeEntry[]> {

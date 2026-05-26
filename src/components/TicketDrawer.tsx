@@ -7,6 +7,7 @@ import {
   Plus,
   Save,
   Timer,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useDialogA11y } from '../hooks/useDialogA11y';
@@ -19,28 +20,52 @@ import {
   mockUsers,
 } from '../data/mockData';
 import { useReadOnly } from '../hooks/useReadOnly';
-import { useSaveIssue } from '../hooks/useSaveIssue';
+import { useIssueActions } from '../hooks/useIssueActions';
 
 interface Props {
   issue: Issue;
   onClose: () => void;
   onSaved: (issue: Issue) => void;
+  /**
+   * Fires after a successful delete. When provided, the drawer renders a
+   * Delete affordance in the footer; the parent is expected to refresh
+   * its list and clear any "open issue" state.
+   */
+  onDeleted?: (id: number) => void;
   onQuickEdit?: (issue: Issue) => void;
 }
 
-export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: Props) {
+export default function TicketDrawer({ issue, onClose, onSaved, onDeleted, onQuickEdit }: Props) {
   const [draft, setDraft] = useState<Issue>(issue);
-  const { saving, save: saveIssue } = useSaveIssue();
+  const actions = useIssueActions();
+  const { saving } = actions;
   const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
 
   const save = async () => {
     try {
-      const updated = await saveIssue(issue.id, draft);
+      const updated = await actions.save(issue.id, draft);
       onSaved(updated);
     } catch {
-      // Toast surfaced by useSaveIssue; keep the drawer open for retry.
+      // Toast surfaced by useIssueActions; keep the drawer open for retry.
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDeleted) return;
+    // Browser confirm is fine for the pattern; can swap to a styled modal
+    // in a polish pass.
+    const ok =
+      typeof window !== 'undefined' &&
+      window.confirm(`Delete issue #${issue.id}? This can't be undone.`);
+    if (!ok) return;
+    try {
+      await actions.remove(issue.id);
+      onClose();
+      onDeleted(issue.id);
+    } catch {
+      // Toast surfaced; keep the drawer open.
     }
   };
 
@@ -286,6 +311,17 @@ export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: P
             >
               <CheckCircle2 size={14} /> Mark complete
             </button>
+            {onDeleted && (
+              <button
+                className="btn-ghost text-red-700 hover:bg-red-50"
+                onClick={handleDelete}
+                disabled={saving || readOnly}
+                title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+                data-testid="ticket-drawer-delete"
+              >
+                <Trash2 size={14} /> Delete
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button className="btn-secondary" onClick={onClose}>Cancel</button>

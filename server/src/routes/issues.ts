@@ -160,6 +160,131 @@ async function camelPatchToRedmineBody(patch: PatchBody): Promise<Record<string,
   return body;
 }
 
+// ─── POST /issues ─────────────────────────────────────────────────────────
+//
+// Create a new issue. Same zod allowlist as PATCH plus projectId (required)
+// — the other required fields (subject, tracker, ...) bubble up as Redmine
+// validation errors that pass through as UPSTREAM_ERROR.
+
+const createBodySchema = z
+  .object({
+    projectId: z.number().int().positive(),
+    subject: z.string().min(1).max(255),
+    description: z.string().max(65_535).optional(),
+    status: z.string().min(1).max(64).optional(),
+    priority: z.string().min(1).max(64).optional(),
+    tracker: z.string().min(1).max(64).optional(),
+    assignedToId: z.number().int().positive().nullable().optional(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    estimatedHours: z.number().nonnegative().nullable().optional(),
+    doneRatio: z.number().int().min(0).max(100).optional(),
+    parentIssueId: z.number().int().positive().nullable().optional(),
+  })
+  .strict();
+
+type CreateBody = z.infer<typeof createBodySchema>;
+
+async function camelCreateToRedmineBody(input: CreateBody): Promise<Record<string, unknown>> {
+  // Re-uses the same enum lookups + camel→snake mapping as PATCH; treats
+  // projectId + subject as required fields.
+  const patchShape = await camelPatchToRedmineBody({
+    subject: input.subject,
+    description: input.description,
+    status: input.status,
+    priority: input.priority,
+    tracker: input.tracker,
+    assignedToId: input.assignedToId,
+    startDate: input.startDate,
+    dueDate: input.dueDate,
+    estimatedHours: input.estimatedHours,
+    doneRatio: input.doneRatio,
+    parentIssueId: input.parentIssueId,
+  });
+  return { project_id: input.projectId, ...patchShape };
+}
+
+issues.post('/', async (c) => {
+  const requestId = c.get('requestId');
+
+  let parsed: CreateBody;
+  try {
+    parsed = createBodySchema.parse(await c.req.json());
+  } catch (err) {
+    return c.json(
+      {
+        error: {
+          code: 'BAD_REQUEST',
+          message:
+            err instanceof z.ZodError
+              ? err.issues[0]?.message ?? 'Invalid create body.'
+              : 'Invalid create body.',
+          requestId,
+        },
+      },
+      400,
+    );
+  }
+
+  let redmineBody: Record<string, unknown>;
+  try {
+    redmineBody = await camelCreateToRedmineBody(parsed);
+  } catch (err) {
+    if (err instanceof PatchValidationError) {
+      return c.json(
+        { error: { code: 'BAD_REQUEST', message: err.message, requestId } },
+        422,
+      );
+    }
+    throw err;
+  }
+
+  let created: { issue: RedmineIssueDto };
+  try {
+    created = await redmineFetch<{ issue: RedmineIssueDto }>('/issues.json', {
+      method: 'POST',
+      body: { issue: redmineBody },
+    });
+  } catch (err) {
+    if (err instanceof RedmineHttpError && err.status === 422) {
+      return c.json(
+        {
+          error: {
+            code: 'UPSTREAM_ERROR',
+            message: err.redmineMessage ?? 'Redmine rejected the create.',
+            requestId,
+          },
+        },
+        422,
+      );
+    }
+    throw err;
+  }
+
+  return c.json(adaptIssue(created.issue), 201);
+});
+
+// ─── DELETE /issues/:id ───────────────────────────────────────────────────
+
+issues.delete('/:id{[0-9]+}', async (c) => {
+  const id = Number(c.req.param('id'));
+  const requestId = c.get('requestId');
+
+  try {
+    await redmineFetch<void>(`/issues/${id}.json`, { method: 'DELETE' });
+  } catch (err) {
+    if (err instanceof RedmineHttpError && err.status === 404) {
+      return c.json(
+        { error: { code: 'NOT_FOUND', message: `Issue ${id} not found.`, requestId } },
+        404,
+      );
+    }
+    throw err;
+  }
+
+  return c.json({ id });
+});
+
 issues.patch('/:id{[0-9]+}', async (c) => {
   const id = Number(c.req.param('id'));
   const requestId = c.get('requestId');

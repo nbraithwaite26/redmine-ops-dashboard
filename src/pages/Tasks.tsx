@@ -92,6 +92,10 @@ export default function Tasks() {
             setOpenIssue(null);
             void load();
           }}
+          onDeleted={() => {
+            setOpenIssue(null);
+            void load();
+          }}
           onQuickEdit={(i) => {
             setOpenIssue(null);
             setQuickIssue(i);

@@ -217,7 +217,7 @@ describe('PATCH /issues/:id', () => {
     expect(body.error.code).toBe('NOT_FOUND');
   });
 
-  it('passes Redmine 422 through as 422 UPSTREAM_ERROR', async () => {
+  it('passes Redmine 422 through as 422 UPSTREAM_ERROR (status path)', async () => {
     globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if ((init?.method ?? 'GET') === 'PUT') {
@@ -248,5 +248,136 @@ describe('PATCH /issues/:id', () => {
     const body = (await res2.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('UPSTREAM_ERROR');
     expect(body.error.message).toContain('Subject is invalid');
+  });
+});
+
+describe('POST /issues (create)', () => {
+  const statusesPayload = {
+    issue_statuses: [
+      { id: 1, name: 'New' },
+      { id: 2, name: 'In Progress' },
+    ],
+  };
+
+  afterEach(() => {
+    globalThis.fetch = REAL_FETCH;
+  });
+
+  it('returns 400 when projectId is missing', async () => {
+    const res = await makeWritableApp().request('/issues', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subject: 'A new task' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when subject is empty', async () => {
+    const res = await makeWritableApp().request('/issues', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: 7, subject: '' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('POSTs the camel→snake mapped body and returns 201 with the created issue', async () => {
+    const calls: Array<{ url: string; method: string; body: string | undefined }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      calls.push({ url, method, body });
+      if (url.includes('/issue_statuses.json')) {
+        return new Response(JSON.stringify(statusesPayload), { status: 200 });
+      }
+      if (url.endsWith('/issues.json') && method === 'POST') {
+        return new Response(JSON.stringify(issueFixture), { status: 201 });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await makeWritableApp().request('/issues', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        projectId: 7,
+        subject: 'A new task',
+        status: 'In Progress',
+        assignedToId: 42,
+        dueDate: '2026-06-30',
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    const postCall = calls.find((c) => c.method === 'POST')!;
+    const sent = JSON.parse(postCall.body!) as { issue: Record<string, unknown> };
+    expect(sent.issue.project_id).toBe(7);
+    expect(sent.issue.subject).toBe('A new task');
+    expect(sent.issue.status_id).toBe(2);
+    expect(sent.issue.assigned_to_id).toBe(42);
+    expect(sent.issue.due_date).toBe('2026-06-30');
+    expect(sent.issue.projectId).toBeUndefined();
+
+    const body = (await res.json()) as { id: number };
+    expect(body.id).toBe(1001);
+  });
+
+  it('passes Redmine 422 through as 422 UPSTREAM_ERROR', async () => {
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if ((init?.method ?? 'GET') === 'POST' && url.endsWith('/issues.json')) {
+        return new Response(
+          JSON.stringify({ errors: ['Tracker is required'] }),
+          { status: 422 },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await makeWritableApp().request('/issues', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: 7, subject: 'New' }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('UPSTREAM_ERROR');
+    expect(body.error.message).toContain('Tracker is required');
+  });
+});
+
+describe('DELETE /issues/:id', () => {
+  afterEach(() => {
+    globalThis.fetch = REAL_FETCH;
+  });
+
+  it('deletes the issue and returns { id }', async () => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if ((init?.method ?? 'GET') === 'DELETE' && url.includes('/issues/1001.json')) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await makeWritableApp().request('/issues/1001', { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: number };
+    expect(body.id).toBe(1001);
+    expect(calls.some((c) => c.startsWith('DELETE '))).toBe(true);
+  });
+
+  it('passes Redmine 404 through as 404 NOT_FOUND', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ errors: ['Not found'] }), { status: 404 });
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await makeWritableApp().request('/issues/9999', { method: 'DELETE' });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('NOT_FOUND');
   });
 });
