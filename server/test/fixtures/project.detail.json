@@ -1,0 +1,24 @@
+{
+  "project": {
+    "id": 7,
+    "name": "Project A",
+    "identifier": "project-a",
+    "description": "Anonymized project description.",
+    "status": 1,
+    "created_on": "2025-01-01T00:00:00Z",
+    "updated_on": "2026-05-01T00:00:00Z",
+    "enabled_modules": [
+      { "id": 1, "name": "issue_tracking" },
+      { "id": 2, "name": "time_tracking" },
+      { "id": 3, "name": "wiki" },
+      { "id": 4, "name": "easy_gantt_resources" }
+    ],
+    "trackers": [
+      { "id": 1, "name": "Bug" },
+      { "id": 2, "name": "Task" }
+    ],
+    "issue_categories": [
+      { "id": 1, "name": "Category A" }
+    ]
+  }
+}

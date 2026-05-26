@@ -9,10 +9,20 @@ const base = (globalThis as any).process?.env?.VITE_BASE ?? '/redmine-ops-dashbo
 export default defineConfig({
   plugins: [react()],
   base,
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/tests/setup.ts',
     css: false,
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['server/**', 'node_modules/**', 'dist/**'],
   },
 });

@@ -1,0 +1,27 @@
+{
+  "name": "@redmine-ops/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.22",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "vitest": "^2.1.9"
+  }
+}
