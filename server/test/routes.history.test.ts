@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { appendEvent, readEvents } from '../src/store/historyStore.js';
 
-const HISTORY_PATH = './server/test/.tmp-history.jsonl';
+// Mirror the historyStore's REPO_ROOT-anchored path resolution so the
+// test clears the same file the production code writes. (Setup.ts sets
+// HISTORY_DB='./server/test/.tmp-history.jsonl' which resolves against
+// the repo root regardless of CWD.)
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const HISTORY_PATH = resolve(REPO_ROOT, 'server/test/.tmp-history.jsonl');
 
 async function clearHistory() {
   try {

@@ -1,6 +1,18 @@
 import { promises as fs } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
+
+/**
+ * Resolve the project root once at module load. `import.meta.url` points at
+ * server/src/store/historyStore.ts (or its dist equivalent), and the repo
+ * root is exactly three levels up from there. We anchor to that so a
+ * relative HISTORY_DB like `./server/data/history.jsonl` resolves the same
+ * way regardless of which directory the backend was started from —
+ * previously starting from `server/` produced a nested `server/server/data/`
+ * path, which was a wart.
+ */
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 /**
  * Append-only JSONL history store. Per plan §14.3 v1.1: SQLite was the
@@ -39,10 +51,11 @@ export type HistoryEvent = SyncEvent | LoginEvent;
 
 function resolveDbPath(): string {
   // HISTORY_DB defaults to ./server/data/history.jsonl from the plan §14.3.
-  // When the server is started from repo root the relative path resolves
-  // correctly. We accept absolute paths too.
+  // Absolute paths pass through. Relative paths resolve against the repo
+  // root (computed once from `import.meta.url`) so the store lands in the
+  // same place no matter what CWD the backend was launched from.
   const raw = config.admin.historyDb;
-  return isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
+  return isAbsolute(raw) ? raw : resolve(REPO_ROOT, raw);
 }
 
 async function ensureDir() {

@@ -20,10 +20,6 @@ vite.config.js
 .env.local
 .env
 
-# Runtime data — never committed. The double pattern catches both repo-root
-# resolution (server/data/) and CWD-relative resolution when the backend is
-# started from server/ (server/server/data/).
+# Runtime data — never committed.
 server/data/
-server/server/data/
-**/server/data/
 server/test/.tmp-*

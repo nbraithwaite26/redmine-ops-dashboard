@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 
 async function makeApp() {
@@ -14,7 +16,10 @@ async function makeApp() {
   return app as unknown as Hono;
 }
 
-const HISTORY_PATH = './server/test/.tmp-history.jsonl';
+// Anchored to repo root so the test reads the same file the historyStore
+// writes (see server/src/store/historyStore.ts for the same pattern).
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const HISTORY_PATH = resolve(REPO_ROOT, 'server/test/.tmp-history.jsonl');
 
 async function clearHistory() {
   try {
