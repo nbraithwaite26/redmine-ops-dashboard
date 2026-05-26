@@ -64,6 +64,8 @@ export default function Hours() {
 
       {logTimeTarget && (
         <AddTimeModal
+          initialProjectId={logTimeTarget.projectId}
+          initialIssueId={logTimeTarget.id}
           onClose={() => setLogTimeTarget(null)}
           onCreated={() => {
             setLogTimeTarget(null);

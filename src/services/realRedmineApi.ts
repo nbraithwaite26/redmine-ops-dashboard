@@ -423,15 +423,17 @@ export const realRedmineApi: RedmineApi = {
     from?: string;
     to?: string;
     userId?: number;
+    issueId?: number;
   } = {}): Promise<TimeEntry[]> {
-    // Backend honors `from`, `to`, and `user_id` as passthrough query params
-    // (see server/src/routes/timeEntries.ts LIST_FILTERS). Cache key includes
-    // them via cacheKey()'s sorted-query serialization so different ranges
-    // don't collide.
+    // Backend honors from / to / user_id / issue_id as passthrough query
+    // params (see server/src/routes/timeEntries.ts LIST_FILTERS). Cache key
+    // includes them via cacheKey()'s sorted-query serialization so different
+    // ranges don't collide.
     const query: Record<string, string | number> = { limit: 100 };
     if (opts.from) query.from = opts.from;
     if (opts.to) query.to = opts.to;
     if (opts.userId !== undefined) query.user_id = opts.userId;
+    if (opts.issueId !== undefined) query.issue_id = opts.issueId;
     const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', query);
     return res.items;
   },

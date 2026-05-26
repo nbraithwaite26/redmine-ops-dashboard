@@ -51,6 +51,7 @@ export interface RedmineApi {
     from?: string;
     to?: string;
     userId?: number;
+    issueId?: number;
   }): Promise<TimeEntry[]>;
   createTimeEntry(input: Partial<TimeEntry>): Promise<TimeEntry>;
   updateTimeEntry(id: number, patch: Partial<TimeEntry>): Promise<TimeEntry>;

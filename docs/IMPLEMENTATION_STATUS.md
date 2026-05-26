@@ -2,7 +2,7 @@
 
 Snapshot of the work executed against [`docs/INTEGRATION_PLAN.md`](./INTEGRATION_PLAN.md). Section numbers below match the plan's §9 implementation order.
 
-Last updated: 2026-05-26.
+Last updated: 2026-05-26 (Hours redesign + writes Wave 1+2).
 
 ## Section ledger
 
@@ -19,12 +19,13 @@ Last updated: 2026-05-26.
 | 14c — Admin page tabs | §14.1 | ✅ done | Users / Permissions / History tabs in `Admin.tsx`; mock-mode fabricators in `adminApi.ts`; degraded-users banner; history kind/status/since/until filters; 9 new tests in `Admin.test.tsx` |
 | 12 — UI polish | §7.8.11–13 | ✅ done | Last-sync chip (prior); custom-fields empty state in `TicketDrawer`; `today()` helper in `lib/format.ts` replaces real-mode `MOCK_TODAY` reads; Gantt shape left as-is per plan §7.8.11 |
 | Sync-events wiring | §14.3 note | ✅ done | `AppShell.handleSync` POSTs `{ trigger, status, durationMs, errorMessage? }` to `/api/sync-events`; best-effort (catch + swallow). Mock mode short-circuits in `adminApi.postSyncEvent` |
-| 10 — Write routes (backend) | §9 Step 10 | ⏳ not started | Gated by `REDMINE_READ_ONLY=false` |
-| 11 — Frontend write paths | §7.7 | ⏳ not started | Comment/subtask/reparent/delete with optimistic update + revert + toast |
-| 13 — Rate-limit production story | §6 Notes | ⏳ not started | Redis-backed `RateLimitStore` |
-| 14 — Doc updates | §9 Step 14 | 🛠 in progress | README / ARCHITECTURE / API doc pass |
-| Phase G — Responsive sweep | refactor log | ⏳ not started | Sidebar overlay vs. push on narrow viewports, drawer full-width on mobile, card grid breakpoints, table horizontal-scroll |
-| 15 — Final validation | §9 Step 15 | ⏳ not started | After writes + doc pass land |
+| 10 — Write routes (backend) | §9 Step 10 | ✅ done | PATCH/POST/DELETE `/issues`; POST/PATCH/DELETE `/time-entries`. Zod allowlists; name→id resolution for status/priority/tracker/activity via per-route enum cache; Redmine 404/422 → NOT_FOUND/UPSTREAM_ERROR. 21 server tests cover the surface. |
+| 11 — Frontend write paths | §7.7 | 🛠 in progress | `useIssueActions` (save/create/remove/comment/reparent/addSubtaskFor) + `useTimeEntryActions` (save/create/remove). Toasts + error-mapping. Read-only respected. **Wired:** QuickEdit + TicketDrawer Save; TicketDrawer Delete; AddTimeModal create; TimeTracking delete. **Pending:** Add subtask, comment post, reparent, time-entry edit, "+ New issue" CTA, list-optimistic refactor. |
+| Hours redesign | plan §1 | ✅ done | Hours page replaced with user-card landing showing this-week + last-week sections. Drilldown: user → projects → tasks. Per-task "Log time" pre-seeds AddTimeModal. AddTimeModal rewritten: no user dropdown, dependent project→task dropdown, past-entries panel, status-bump from `New` → `In Progress` on first time log. `hoursAggregate.ts` + 19 unit tests; `Hours.test.tsx` + 4 tests; `AddTimeModal.test.tsx` + 4 tests. |
+| 13 — Rate-limit production story | §6 Notes | ⏳ not started | Redis-backed `RateLimitStore` + `SessionStore` |
+| 14 — Doc updates | §9 Step 14 | ✅ done | README / ARCHITECTURE / API rewritten to reflect the two-process app. Each new feature commit updates this status doc. |
+| Phase G — Responsive sweep | refactor log | ⏳ not started | Sidebar overlay vs. push on narrow viewports, drawer full-width on mobile, card grid breakpoints, table horizontal-scroll, AddTimeModal mobile layout |
+| 15 — Final validation | §9 Step 15 | ⏳ not started | After remaining §11 wiring + Phase G land. Flip `REDMINE_READ_ONLY=false`, smoke every mutation path against live Redmine. |
 
 ## File map (new since the plan started)
 

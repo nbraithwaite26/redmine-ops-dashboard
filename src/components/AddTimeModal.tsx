@@ -1,44 +1,149 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, X } from 'lucide-react';
 import {
-  mockIssues,
-  mockProjects,
-  mockTimeActivities,
-  mockUsers,
-} from '../data/mockData';
+  getIssueById,
+  getIssues,
+  getProjects,
+  getTimeActivities,
+  getTimeEntries,
+} from '../services/redmineApi';
+import type { Issue, Project, TimeEntry } from '../types/redmine';
 import { useDialogA11y } from '../hooks/useDialogA11y';
 import { useTimeEntryActions } from '../hooks/useTimeEntryActions';
+import { useIssueActions } from '../hooks/useIssueActions';
 import { useReadOnly } from '../hooks/useReadOnly';
+import { formatHours } from '../lib/format';
 
 interface Props {
   onClose: () => void;
   onCreated: () => void;
+  /** Pre-select the project dropdown to this id when the modal opens. */
+  initialProjectId?: number;
+  /**
+   * Pre-select the task dropdown to this id when the modal opens. Implies
+   * the issue's project — `initialProjectId` is inferred from it if not
+   * supplied separately.
+   */
+  initialIssueId?: number;
 }
 
 /**
- * "Add time entry" dialog launched from the TimeTracking page. Extracted
- * into its own component in Phase C so the page file focuses on data
- * loading + table rendering. The inline `<style>` block is removed in
- * Phase D in favor of a shared `.modal-input` class on `index.css`.
+ * "Add time entry" dialog. Launched from the TimeTracking page and from
+ * each task row on the Hours page.
+ *
+ * Behavior contract (plan §1 — Add Time Entry):
+ *   - Project dropdown sourced from real Redmine projects via getProjects().
+ *   - Task/issue dropdown auto-populates with the selected project's
+ *     issues. Switching the project resets the issue selection.
+ *   - No user dropdown — entries are always logged by the current user.
+ *   - When a task is selected, the modal shows a small list of that
+ *     task's existing time entries below the form ("Previous logs").
+ *   - After a successful save, if the selected task had status === 'New',
+ *     it's bumped to 'In Progress' best-effort. Failing the bump still
+ *     counts the time log as a success.
  */
-export default function AddTimeModal({ onClose, onCreated }: Props) {
-  const [userId, setUserId] = useState(mockUsers[0].id);
-  const [projectId, setProjectId] = useState(mockProjects[0].id);
-  const [issueId, setIssueId] = useState<number | null>(null);
-  const [activity, setActivity] = useState(mockTimeActivities[0]);
+export default function AddTimeModal({
+  onClose,
+  onCreated,
+  initialProjectId,
+  initialIssueId,
+}: Props) {
+  // ─── State ──────────────────────────────────────────────────────────────
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activities, setActivities] = useState<string[]>([]);
+  const [issuesForProject, setIssuesForProject] = useState<Issue[]>([]);
+  const [pastEntries, setPastEntries] = useState<TimeEntry[]>([]);
+
+  const [projectId, setProjectId] = useState<number | null>(initialProjectId ?? null);
+  const [issueId, setIssueId] = useState<number | null>(initialIssueId ?? null);
+  const [activity, setActivity] = useState<string>('');
   const [hours, setHours] = useState('');
   const [spentOn, setSpentOn] = useState(new Date().toISOString().slice(0, 10));
   const [comments, setComments] = useState('');
 
-  const projectIssues = mockIssues.filter((i) => i.projectId === projectId);
   const { saving, create } = useTimeEntryActions();
+  const issueActions = useIssueActions();
   const { readOnly } = useReadOnly();
 
+  // ─── Initial load: projects, activities, and (if pre-seeded) the issue's
+  //                   project so the dropdowns hydrate correctly ───────────
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [projectList, activityList] = await Promise.all([
+        getProjects(),
+        getTimeActivities(),
+      ]);
+      if (cancelled) return;
+      setProjects(projectList);
+      setActivities(activityList);
+      if (activityList.length > 0) setActivity((cur) => cur || activityList[0]!);
+
+      // If we got an initialIssueId without a project, look it up and seed
+      // the project dropdown from there.
+      if (initialIssueId && !initialProjectId) {
+        const issue = await getIssueById(initialIssueId);
+        if (cancelled) return;
+        if (issue) setProjectId(issue.projectId);
+      } else if (projectId === null && projectList.length > 0) {
+        setProjectId(projectList[0]!.id);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Run once on open — pre-seed props are captured at mount time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── When the project changes, refresh the task list ───────────────────
+
+  useEffect(() => {
+    if (projectId === null) {
+      setIssuesForProject([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const all = await getIssues();
+      if (cancelled) return;
+      setIssuesForProject(all.filter((i) => i.projectId === projectId));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // ─── When the issue changes, refresh the past-entries panel ────────────
+
+  useEffect(() => {
+    if (issueId === null) {
+      setPastEntries([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await getTimeEntries({ issueId });
+      if (cancelled) return;
+      // Newest first.
+      setPastEntries(
+        [...entries].sort((a, b) => (b.spentOn > a.spentOn ? 1 : b.spentOn < a.spentOn ? -1 : 0)),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [issueId]);
+
+  // ─── Save handler ──────────────────────────────────────────────────────
+
   const save = async () => {
-    const user = mockUsers.find((u) => u.id === userId)!;
+    if (projectId === null) return;
+    let createdEntry;
     try {
-      await create({
-        user,
+      createdEntry = await create({
         projectId,
         issueId,
         activity,
@@ -46,14 +151,39 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
         spentOn,
         comments,
       });
-      onCreated();
-      onClose();
     } catch {
       // Toast already surfaced; keep the modal open for retry.
+      return;
     }
+
+    // Status-bump: if the selected task is still 'New', move it to
+    // 'In Progress'. Best-effort — a failure here doesn't undo the log.
+    if (issueId !== null) {
+      try {
+        const issue = await getIssueById(issueId);
+        if (issue && issue.status === 'New') {
+          await issueActions.save(issue.id, { status: 'In Progress' });
+        }
+      } catch {
+        // Toast surfaces from the hook; the create itself was fine.
+      }
+    }
+
+    onCreated();
+    onClose();
+    void createdEntry; // referenced for future return-value uses
   };
 
   const dialogRef = useDialogA11y({ open: true, onClose });
+
+  // ─── Derived ────────────────────────────────────────────────────────────
+
+  const pastEntriesSummary = useMemo(() => {
+    const total = pastEntries.reduce((s, e) => s + e.hours, 0);
+    return { count: pastEntries.length, total };
+  }, [pastEntries]);
+
+  // ─── Render ────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -65,7 +195,7 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
     >
       <div
         ref={dialogRef}
-        className="bg-white w-[520px] max-w-[95vw] rounded-xl shadow-xl"
+        className="bg-white w-[640px] max-w-[95vw] max-h-[90vh] overflow-y-auto rounded-xl shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b">
@@ -76,14 +206,18 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
             <X size={18} />
           </button>
         </div>
+
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <label>
-            <div className="text-xs text-ink-muted mb-1">Date</div>
+            <div className="text-xs text-ink-muted mb-1">
+              Date <span className="text-ink-muted">(defaults to today)</span>
+            </div>
             <input
               type="date"
               className="modal-input"
               value={spentOn}
               onChange={(e) => setSpentOn(e.target.value)}
+              data-testid="add-time-date"
             />
           </label>
           <label>
@@ -96,18 +230,41 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
               value={hours}
               onChange={(e) => setHours(e.target.value)}
               placeholder="0.0"
+              data-testid="add-time-hours"
             />
           </label>
           <label>
-            <div className="text-xs text-ink-muted mb-1">User</div>
+            <div className="text-xs text-ink-muted mb-1">Project</div>
             <select
               className="modal-input"
-              value={userId}
-              onChange={(e) => setUserId(Number(e.target.value))}
+              value={projectId ?? ''}
+              onChange={(e) => {
+                setProjectId(e.target.value ? Number(e.target.value) : null);
+                setIssueId(null); // reset the dependent task selection
+              }}
+              data-testid="add-time-project"
             >
-              {mockUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
+              {projects.length === 0 && <option value="">Loading…</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <div className="text-xs text-ink-muted mb-1">Task</div>
+            <select
+              className="modal-input"
+              value={issueId ?? ''}
+              onChange={(e) => setIssueId(e.target.value ? Number(e.target.value) : null)}
+              disabled={projectId === null}
+              data-testid="add-time-task"
+            >
+              <option value="">— None (project-level entry) —</option>
+              {issuesForProject.map((i) => (
+                <option key={i.id} value={i.id}>
+                  #{i.id} {i.subject}
                 </option>
               ))}
             </select>
@@ -118,55 +275,79 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
               className="modal-input"
               value={activity}
               onChange={(e) => setActivity(e.target.value)}
+              data-testid="add-time-activity"
             >
-              {mockTimeActivities.map((a) => (
+              {activities.length === 0 && <option value="">Loading…</option>}
+              {activities.map((a) => (
                 <option key={a} value={a}>
                   {a}
                 </option>
               ))}
             </select>
           </label>
-          <label>
-            <div className="text-xs text-ink-muted mb-1">Project</div>
-            <select
-              className="modal-input"
-              value={projectId}
-              onChange={(e) => {
-                setProjectId(Number(e.target.value));
-                setIssueId(null);
-              }}
-            >
-              {mockProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <div className="text-xs text-ink-muted mb-1">Issue</div>
-            <select
-              className="modal-input"
-              value={issueId ?? ''}
-              onChange={(e) => setIssueId(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">— None —</option>
-              {projectIssues.map((i) => (
-                <option key={i.id} value={i.id}>
-                  #{i.id} {i.subject}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="sm:col-span-2">
+          <label className="sm:col-span-1">
             <div className="text-xs text-ink-muted mb-1">Comment</div>
             <input
               className="modal-input"
               value={comments}
               onChange={(e) => setComments(e.target.value)}
+              data-testid="add-time-comment"
             />
           </label>
         </div>
+
+        {issueId !== null && (
+          <section
+            className="px-5 pb-4 border-t pt-4"
+            data-testid="past-entries-panel"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs uppercase tracking-wide text-ink-muted">
+                Previous logs on this task
+              </h3>
+              {pastEntriesSummary.count > 0 && (
+                <span className="text-xs text-ink-muted">
+                  {pastEntriesSummary.count}{' '}
+                  {pastEntriesSummary.count === 1 ? 'entry' : 'entries'} ·{' '}
+                  {formatHours(pastEntriesSummary.total)}
+                </span>
+              )}
+            </div>
+            {pastEntries.length === 0 ? (
+              <p
+                className="text-xs text-ink-muted"
+                data-testid="past-entries-empty"
+              >
+                No time has been logged on this task yet.
+              </p>
+            ) : (
+              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                {pastEntries.slice(0, 8).map((e) => (
+                  <li
+                    key={e.id}
+                    data-testid={`past-entry-${e.id}`}
+                    className="flex items-center gap-3 text-xs"
+                  >
+                    <span className="text-ink-muted w-20 tabular-nums">{e.spentOn}</span>
+                    <span className="flex-1 truncate">{e.user.name}</span>
+                    <span className="text-ink-muted truncate flex-1">
+                      {e.activity || '—'}
+                    </span>
+                    <span className="font-medium tabular-nums w-12 text-right">
+                      {formatHours(e.hours)}
+                    </span>
+                  </li>
+                ))}
+                {pastEntries.length > 8 && (
+                  <li className="text-[11px] text-ink-muted">
+                    + {pastEntries.length - 8} older…
+                  </li>
+                )}
+              </ul>
+            )}
+          </section>
+        )}
+
         <div className="px-5 py-3 border-t flex justify-end gap-2">
           <button className="btn-secondary" onClick={onClose}>
             Cancel
@@ -174,8 +355,9 @@ export default function AddTimeModal({ onClose, onCreated }: Props) {
           <button
             className="btn-brand"
             onClick={save}
-            disabled={saving || readOnly}
+            disabled={saving || readOnly || projectId === null}
             title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+            data-testid="add-time-save"
           >
             <Save size={14} /> {saving ? 'Saving…' : 'Save'}
           </button>

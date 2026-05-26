@@ -202,11 +202,12 @@ export const mockRedmineApi: RedmineApi = {
 
   // ─── Time ────────────────────────────────────────────────────────────
   async getTimeEntries(opts = {}) {
-    const { from, to, userId } = opts;
+    const { from, to, userId, issueId } = opts;
     let result = timeEntries;
     if (from) result = result.filter((t) => t.spentOn >= from);
     if (to) result = result.filter((t) => t.spentOn <= to);
     if (userId !== undefined) result = result.filter((t) => t.user.id === userId);
+    if (issueId !== undefined) result = result.filter((t) => t.issueId === issueId);
     return wait(result);
   },
 
