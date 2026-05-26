@@ -1,66 +1,174 @@
-import { useEffect, useState } from 'react';
-import { FolderKanban, Plus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { getIssues, getProjects } from '../services/redmineApi';
-import type { Issue, Project } from '../types/redmine';
+import { useEffect, useMemo, useState } from 'react';
+import { getProjects } from '../services/redmineApi';
+import DashboardCard from '../components/DashboardCard';
+import ProjectCategoryCard from '../components/ProjectCategoryCard';
+import {
+  DEFAULT_PROJECT_SOURCE,
+  getParentCandidates,
+  resolveProjectSource,
+} from '../services/projectSource';
+import { getAllDescendants } from '../lib/projectTree';
+import type { DashboardMetric, Project } from '../types/redmine';
+
+const safePercent = (value: number, total: number): number => {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((value / total) * 100)));
+};
+
+function buildSourceMetrics(
+  projects: Project[],
+  rootId: number,
+  totalProjects: number,
+  categoryCount: number,
+): DashboardMetric[] {
+  const descendants = getAllDescendants(projects, rootId);
+  const active = descendants.filter((p) => p.status === 'Active').length;
+  const atRisk = descendants.filter((p) => p.status === 'At Risk').length;
+  return [
+    {
+      id: 'total-projects',
+      title: 'Total projects',
+      value: totalProjects,
+      progress: 100,
+      color: '#3B82F6',
+      caption: 'across all subprojects',
+    },
+    {
+      id: 'active-projects',
+      title: 'Active',
+      value: active,
+      total: totalProjects,
+      progress: safePercent(active, totalProjects),
+      statusLabel: 'Active',
+      statusColor: 'green',
+      color: '#10B981',
+    },
+    {
+      id: 'at-risk-projects',
+      title: 'At risk',
+      value: atRisk,
+      total: totalProjects,
+      progress: safePercent(atRisk, totalProjects),
+      statusLabel: atRisk > 0 ? 'Needs attention' : 'All clear',
+      statusColor: atRisk > 0 ? 'red' : 'gray',
+      color: '#EF4444',
+    },
+    {
+      id: 'categories',
+      title: 'Categories',
+      value: categoryCount,
+      progress: 100,
+      color: '#8B5CF6',
+      caption: 'direct sections',
+    },
+  ];
+}
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const navigate = useNavigate();
+  const [selectedRootId, setSelectedRootId] = useState<number | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [p, i] = await Promise.all([getProjects(), getIssues()]);
+      const p = await getProjects();
       setProjects(p);
-      setIssues(i);
+      setLoading(false);
     })();
   }, []);
 
-  const stats = (projectId: number) => {
-    const projectIssues = issues.filter((i) => i.projectId === projectId);
-    const open = projectIssues.filter((i) => i.status !== 'Closed' && i.status !== 'Resolved');
-    return { total: projectIssues.length, open: open.length };
-  };
+  const candidates = useMemo(() => getParentCandidates(projects), [projects]);
+
+  // Resolve the source: explicit picker choice wins, else the default path.
+  const source = useMemo(
+    () =>
+      resolveProjectSource(
+        projects,
+        selectedRootId !== undefined ? { rootId: selectedRootId } : {},
+      ),
+    [projects, selectedRootId],
+  );
+
+  const metrics = useMemo(
+    () =>
+      source.root
+        ? buildSourceMetrics(
+            projects,
+            source.root.id,
+            source.totalProjects,
+            source.categories.length,
+          )
+        : [],
+    [projects, source],
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
-        <button className="btn-brand" onClick={() => navigate('/project-builder')}>
-          <Plus size={14} /> New project
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {projects.map((p) => {
-          const s = stats(p.id);
-          return (
-            <div key={p.id} className="card p-4">
-              <div className="flex items-center gap-2 text-ink-muted">
-                <FolderKanban size={18} />
-                <span
-                  className={
-                    p.status === 'At Risk'
-                      ? 'pill-orange ml-auto'
-                      : p.status === 'Closed'
-                      ? 'pill-gray ml-auto'
-                      : 'pill-green ml-auto'
-                  }
-                >
-                  {p.status}
-                </span>
-              </div>
-              <div className="mt-2 font-semibold">{p.name}</div>
-              <div className="text-xs text-ink-muted">{p.identifier}</div>
-              <p className="text-sm text-ink-soft mt-2 line-clamp-2">{p.description}</p>
-              <div className="flex items-center justify-between mt-3 text-xs text-ink-muted">
-                <span>{s.open} open / {s.total} total</span>
-                <span>Updated {p.updatedOn}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="space-y-6">
+      <section
+        data-testid="projects-hero"
+        className="rounded-2xl p-6 text-white shadow-card"
+        style={{
+          background:
+            'linear-gradient(to right, var(--hero-from), var(--hero-to))',
+        }}
+      >
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-sm text-brand">Projects</p>
+            <h1 className="text-3xl font-semibold mt-1">
+              {source.root?.name ?? DEFAULT_PROJECT_SOURCE.label}
+            </h1>
+            <p className="text-sm text-white/70 mt-1 max-w-lg">
+              An at-a-glance view of the project portfolio. Pick a source below,
+              then drill into a category to see its projects.
+            </p>
+          </div>
+          <label className="text-sm">
+            <span className="sr-only">Project source</span>
+            <select
+              value={selectedRootId ?? source.root?.id ?? ''}
+              onChange={(e) =>
+                setSelectedRootId(e.target.value ? Number(e.target.value) : undefined)
+              }
+              aria-label="Project source"
+              className="rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-300"
+            >
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      {source.root && metrics.length > 0 && (
+        <section data-testid="projects-metrics">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <DashboardCard key={metric.id} metric={metric} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="text-lg font-semibold">Categories</h2>
+        </div>
+        {source.categories.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {source.categories.map((category) => (
+              <ProjectCategoryCard key={category.slug} category={category} />
+            ))}
+          </div>
+        ) : (
+          <div className="card p-8 text-center text-sm text-ink-muted">
+            {loading
+              ? 'Loading projects…'
+              : 'No categories found under the selected project source.'}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import Home from './pages/Home';
 import Projects from './pages/Projects';
 import AllProjects from './pages/AllProjects';
+import ProjectCategory from './pages/ProjectCategory';
 import Reports from './pages/Reports';
 import Calendar from './pages/Calendar';
 import Hours from './pages/Hours';
@@ -49,9 +50,11 @@ export default function App() {
 
         <Route path="/past-due" element={<PastDue />} />
 
-        {/* Projects — `/projects` = assigned to me, `/projects/all` = browse all */}
+        {/* Projects — `/projects` = category dashboard, `/projects/all` = browse all,
+            `/projects/category/:slug` = drill-down into one category (CR #15) */}
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/all" element={<AllProjects />} />
+        <Route path="/projects/category/:slug" element={<ProjectCategory />} />
 
         <Route path="/project-builder" element={<ProjectBuilder />} />
         {/* /resources is the new full reorderable view; /resources/personal

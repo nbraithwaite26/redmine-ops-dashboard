@@ -1,46 +1,79 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
-const EXPECTED_LABELS = [
+// Top-level rail labels (All Projects is now a sub-link of Projects).
+const TOP_LEVEL_LABELS = [
   'Home',
   'Dashboard',
   'Tasks',
   'Calendar',
   'Hours',
   'Directory',
-  'All Projects',
   'Projects',
   'Settings',
 ];
 
+beforeEach(() => {
+  localStorage.clear();
+});
+
+afterEach(() => {
+  localStorage.clear();
+});
+
 describe('<Sidebar /> (collapsed vs expanded)', () => {
-  it('renders 9 primary-rail items', () => {
+  it('renders the top-level rail items', () => {
     render(
       <MemoryRouter>
         <Sidebar collapsed={false} onToggle={() => {}} />
       </MemoryRouter>,
     );
-    EXPECTED_LABELS.forEach((label) => {
+    TOP_LEVEL_LABELS.forEach((label) => {
       expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
 
-  it('hides text labels when collapsed but keeps title attributes', () => {
+  it('shows All Projects as a sub-link of Projects (group open by default)', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'All Projects' })).toHaveAttribute(
+      'href',
+      '/projects/all',
+    );
+  });
+
+  it('toggling the Projects group hides/shows its sub-links', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'All Projects' })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('sidebar-group-toggle-projects'));
+    expect(screen.queryByRole('link', { name: 'All Projects' })).not.toBeInTheDocument();
+    // And the group state persists to localStorage.
+    expect(localStorage.getItem('rod.sidebar.groups')).toContain('/projects');
+  });
+
+  it('hides text labels and sub-links when collapsed but keeps top-level titles', () => {
     render(
       <MemoryRouter>
         <Sidebar collapsed={true} onToggle={() => {}} />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute(
-      'data-collapsed',
-      'true',
-    );
-    EXPECTED_LABELS.forEach((label) => {
+    expect(screen.getByTestId('primary-sidebar')).toHaveAttribute('data-collapsed', 'true');
+    TOP_LEVEL_LABELS.forEach((label) => {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
       expect(screen.getByTitle(label)).toBeInTheDocument();
     });
+    // Q6: sub-links are not rendered at all when the rail is collapsed.
+    expect(screen.queryByRole('link', { name: 'All Projects' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-group-toggle-projects')).not.toBeInTheDocument();
   });
 
   it('popout/toggle button is visible when expanded and fires onToggle', () => {
@@ -51,7 +84,6 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
       </MemoryRouter>,
     );
     const popout = screen.getByTestId('sidebar-popout');
-    expect(popout).toBeInTheDocument();
     expect(popout).toHaveAttribute('aria-label', 'Collapse sidebar');
     fireEvent.click(popout);
     expect(onToggle).toHaveBeenCalledTimes(1);
@@ -65,7 +97,6 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
       </MemoryRouter>,
     );
     const popout = screen.getByTestId('sidebar-popout');
-    expect(popout).toBeInTheDocument();
     expect(popout).toHaveAttribute('aria-label', 'Expand sidebar');
     expect(popout).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(popout);
@@ -101,7 +132,6 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
       </MemoryRouter>,
     );
     const aside = screen.getByTestId('primary-sidebar');
-    // Inline style references the CSS variable so theme can swap it.
     expect(aside.getAttribute('style')).toContain('--brand-surface');
   });
 });

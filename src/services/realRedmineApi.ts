@@ -276,8 +276,20 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getProjects(): Promise<Project[]> {
-    const res = await cachedGet<PaginatedWire<ProjectDetailWire>>('/projects', { limit: 100 });
-    return res.items.map((p) => ({
+    // Page through all projects (Redmine caps limit at 100). The project
+    // tree on the Projects page needs the full list, not just the first page.
+    const PAGE = 100;
+    const MAX_PAGES = 50; // safety cap (≈5000 projects)
+    const collected: ProjectDetailWire[] = [];
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const res = await cachedGet<PaginatedWire<ProjectDetailWire>>('/projects', {
+        limit: PAGE,
+        offset: page * PAGE,
+      });
+      collected.push(...res.items);
+      if (res.items.length === 0 || collected.length >= res.total) break;
+    }
+    return collected.map((p) => ({
       id: p.id,
       name: p.name,
       identifier: p.identifier,

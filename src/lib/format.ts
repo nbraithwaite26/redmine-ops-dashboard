@@ -20,6 +20,22 @@ export function today(): Date {
   return MOCK_MODE ? MOCK_TODAY : new Date();
 }
 
+/**
+ * Strip HTML/textile tags and collapse whitespace for plain-text display.
+ * Redmine project descriptions can contain markup (e.g. "<p>…</p>"); this
+ * keeps card previews readable.
+ */
+export function stripHtml(input: string): string {
+  return input
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function isOverdue(dueDate: string | null, today: Date = new Date()): boolean {
   if (!dueDate) return false;
   return dueDate < today.toISOString().slice(0, 10);

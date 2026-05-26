@@ -395,6 +395,233 @@ near-black canvas with grey contrasts; brand yellow stays bright in both.
 
 ---
 
+## #15 — Projects page as category dashboard + All Projects as Projects sub-link
+
+**Status:** ✅ Shipped
+
+**Shipped notes (2026-05-26):** Implemented across the planned 7 steps.
+Live-data verification at `localhost:5174` surfaced three things the plan
+didn't anticipate, resolved with the user:
+- The `**` in `**AV Engineering` is **literally part of the Redmine project
+  name** (not markdown emphasis). `DEFAULT_PROJECT_SOURCE.path` and the mock
+  root were corrected to include it.
+- `AIRCRAFT ENGINEERING` has **20 direct children**, not 3. Decision: show
+  all, but pin the three named categories first (`PINNED_CATEGORY_SLUGS` in
+  `projectSource.ts`). Real names are `Custom Engineering Services`, `STCs`
+  (not "STC"), `Aircraft Engineering Continuous Improvement ` (trailing
+  space) — pinning matches on slug so casing/spacing don't matter.
+- `getProjects()` only fetched the first 100 projects, undercounting
+  categories (STCs was invisible). Decision: paginate the
+  `realRedmineApi.getProjects` adapter through all pages. Total descendants
+  went 75 → 105; STCs now correctly shows 35.
+- Also fixed: Redmine project descriptions contain HTML; added
+  `stripHtml()` in `lib/format.ts` used by the category card + drill-down.
+
+Final validation: typecheck pass, lint (2 pre-existing warnings), `npm test`
+47 files / 341 tests pass, build OK. Browser-verified in dark mode, no
+console errors.
+
+**Decisions locked (user, 2026-05-26):** Q1 = (a) resolve by identifier ·
+Q2 = all descendants · Q3 = (a) parent-swapper · Q4 = **yes**, include a
+headline metrics row · Q5 = mock category names OK · Q6 = (c) sub-links
+hidden until the rail is expanded.
+
+**Scope guardrails (user):** Keep changes frontend/UI-only. Do **not**
+invent permanent API contracts — backend work may be happening
+separately. The default project path must be isolated behind a clearly
+named frontend adapter/mock function (no env-var contract baked in).
+Preserve existing design language, dark/light behavior, spacing, and
+component patterns. No unrelated refactors. Verify at `localhost:5174`.
+
+**Request (verbatim):**
+> "All Projects" should be a sub-link of "Projects" — like a dropdown menu.
+> The Projects page should draw inspiration from the overview page. There
+> should be a menu on the Projects page that lets you select what subprojects
+> are pulled. For now let the project path pulled from be
+> `**AV Engineering\AIRCRAFT ENGINEERING**` and have the cards display the
+> total number of projects under **Custom Engineering Services**, **STC**,
+> and **Aircraft Engineering Continuous Improvement** — as separate cards
+> showing the total projects amongst them. Then when a category card is
+> selected it takes you to another page that shows you an overview of that
+> selected project (so clicking the STC card → see all STC projects).
+
+### Shape of the change
+
+A. **Sidebar restructure** — "All Projects" demoted to a sub-link of
+"Projects". Expanded sidebar: clicking the chevron next to "Projects"
+reveals "All Projects" beneath it. Collapsed sidebar: keep the existing
+"Projects" icon button; sub-link only visible when hovering or after
+expanding the rail.
+
+B. **Projects page redesign** — replace the current "card per project"
+grid with a Home-style landing:
+1. Page header with a **root-project picker** (default
+   `AV Engineering > AIRCRAFT ENGINEERING`).
+2. Row of three **category cards** (Custom Engineering Services, STC,
+   Aircraft Engineering Continuous Improvement) showing the count of
+   projects beneath each. Each card is clickable and navigates to the
+   drill-down route below.
+3. (Optional) Headline metrics row below the cards — open/closed counts,
+   total descendants, last-updated. TBD pending user feedback (see Q4).
+
+C. **New drill-down route** —
+`/projects/category/:slug` (e.g. `/projects/category/stc`) renders a
+filtered AllProjects-style listing: header with category name +
+breadcrumb back to Projects, search + status filter (reused from
+AllProjects), grid of project cards.
+
+D. **Mock data + types** — extend the mock `projects` fixture so the
+three category project nodes exist with children beneath them; the
+real-mode path resolves the same shape from `parent_id` traversal.
+
+### Files
+
+**Create**
+- `src/lib/projectTree.ts` — pure tree helpers (no I/O):
+  `findProjectByPath(projects, ['AV Engineering', 'AIRCRAFT ENGINEERING'])`,
+  `getDirectChildren(projects, parentId)`,
+  `getAllDescendants(projects, rootId)` (Q2: inclusive of all levels),
+  `slugify(name)` for the category route param.
+- `src/services/projectSource.ts` — **the named frontend adapter** that
+  isolates the default project path (Q1 + scope guardrail). Exports a
+  `DEFAULT_PROJECT_SOURCE = { path: ['AV Engineering', 'AIRCRAFT ENGINEERING'], label: 'AV Engineering / AIRCRAFT ENGINEERING' }`
+  constant and `resolveProjectSource(projects, path?)` which finds the
+  root by path (matching on `name`, then resolves to `identifier`),
+  returns its direct children as "categories" each with an
+  all-descendants count. This is the single swap-point when backend
+  wiring lands — no API contract is presumed; it operates on whatever
+  `getProjects()` already returns.
+- `src/pages/ProjectCategory.tsx` — drill-down page for a single
+  category (e.g. STC). Reuses AllProjects' filter UI (search + status).
+- `src/components/ProjectCategoryCard.tsx` — the clickable card used in
+  the Projects landing (Home-card visual + count badge + drill arrow).
+- `src/tests/projectTree.test.ts` — unit tests for the helpers
+  (build a tree fixture, assert path resolution, child counts, deep
+  descendant counts, slugify).
+- `src/tests/projectSource.test.ts` — adapter resolves the default path,
+  returns the right categories + counts, handles missing root.
+- `src/tests/ProjectCategoryCard.test.tsx` — render, count, click-nav.
+- `src/tests/ProjectCategory.test.tsx` — drill-down filtering, empty
+  state, breadcrumb back link.
+
+**Edit**
+- `src/components/Sidebar.tsx` — convert the flat `links` array into a
+  shape that allows nested sub-links (`children?: NavLink[]`), so future
+  project section links can be added without further refactor. Add
+  expand/collapse state for the Projects group (persist in localStorage).
+  Q6: when the rail is collapsed to icon-only, sub-links are hidden;
+  expanding the rail reveals them. Remove the `/projects/all` entry from
+  the top-level list — it becomes a child of Projects.
+- `src/pages/Projects.tsx` — full rewrite to the category-dashboard
+  shape. Loads `getProjects()` once, runs it through
+  `resolveProjectSource`, renders: (1) root-project picker (Q3:
+  parent-swapper — switches which parent's children become the
+  categories), (2) headline metrics row (Q4: e.g. total projects, open
+  vs. closed across descendants, last-updated — built from the resolved
+  tree, reusing `DashboardCard`), (3) the three category cards.
+- `src/App.tsx` — add `<Route path="/projects/category/:slug" …>`.
+  Keep `/projects/all` route intact (the sub-link still points there).
+- `src/data/mockData.ts` — add the three category project nodes
+  (`Custom Engineering Services`, `STC`,
+  `Aircraft Engineering Continuous Improvement`) as children of a new
+  `AIRCRAFT ENGINEERING` project (itself a child of `AV Engineering`),
+  each with 3–5 mock descendants so the counts have something to show.
+- `src/tests/Sidebar.test.tsx` — assert nested sub-link rendering +
+  expand/collapse behavior.
+- `src/tests/Projects.test.tsx` — replace with new assertions: three
+  category cards render, counts match, click navigates to
+  `/projects/category/:slug`, root-picker switches the visible categories.
+- `docs/CHANGE_REQUESTS.md` — flip status to 🛠 then ✅ on ship.
+- `docs/IMPLEMENTATION_STATUS.md` — add a CR #15 row.
+
+**No changes**
+- `src/pages/AllProjects.tsx` — unchanged; still reachable via the
+  sub-link. Acts as the "browse everything, ignoring the category lens"
+  escape hatch.
+- `server/src/routes/projects.ts` — `parentProjectId` is already in the
+  normalized payload; no backend changes needed.
+
+### Dependencies between changes
+
+1. `projectTree.ts` helpers + tests first (foundation; no UI deps).
+2. Mock data fixture update (so the new Projects page has data to show).
+3. `ProjectCategoryCard` component + test.
+4. `ProjectCategory` page + route + test.
+5. `Projects.tsx` rewrite + test (consumes everything above).
+6. `Sidebar.tsx` nested sub-link rewrite + test (independent of the
+   page rewrites; can land in parallel but cleaner after the page works).
+
+Suggested commit sequence: one commit per step above (6 commits) so each
+is independently revertable.
+
+### Test impact
+
+- New tests: 3 files, est. 15–20 new tests.
+- Existing tests touched: `Projects.test.tsx` (rewrite),
+  `Sidebar.test.tsx` (extend), `AppShell.test.tsx` (likely unaffected —
+  sidebar shape changes but the assertion surface is around the
+  primary-sidebar wrapper).
+- No backend tests change.
+
+### Route structure
+
+| Route | Page | Notes |
+| --- | --- | --- |
+| `/projects` | `Projects.tsx` (rewritten) | Category dashboard — picker + metrics + 3 cards |
+| `/projects/all` | `AllProjects.tsx` (unchanged) | Now a **sub-link** of Projects in the sidebar |
+| `/projects/category/:slug` | `ProjectCategory.tsx` (new) | Drill-down; `:slug` from `slugify(category name)` |
+
+Category slug is derived (not stored): `slugify('STC') → 'stc'`,
+`slugify('Custom Engineering Services') → 'custom-engineering-services'`.
+The drill-down page re-resolves the tree and finds the category whose
+slug matches the param, so no state needs to survive navigation.
+
+### Data / API assumptions
+
+- The page consumes the **existing** `getProjects(): Promise<Project[]>`
+  facade only. `Project.parentProjectId` is already in the type and is
+  populated by both the mock and the real adapter — the project tree is
+  derived **client-side** from that flat list. No new endpoints, no new
+  query params, no backend changes.
+- Issue counts per category (if shown on the drill-down) come from the
+  existing `getIssues()` filtered by `projectId`, same as the current
+  Projects/AllProjects pages.
+- No write paths involved — entirely read-only, safe to ship before
+  Section 15 live validation.
+
+### Default project-path representation
+
+- Held as a named constant in the new `src/services/projectSource.ts`
+  adapter: `DEFAULT_PROJECT_SOURCE.path = ['AV Engineering', 'AIRCRAFT ENGINEERING']`.
+- Resolved at runtime by walking `parentProjectId` and matching on
+  `name` (case-insensitive), then pinning to the matched project's
+  `identifier`/`id`. **No `.env` / `VITE_*` contract** is introduced —
+  per the scope guardrail, the path lives in frontend code as a clearly
+  named, single-swap-point adapter.
+- When the user swaps the root via the picker (Q3), the chosen parent's
+  `id` overrides the default for that session (component state only; not
+  persisted unless we later decide to).
+
+### Backend blockers / mock adapter points
+
+- **No blockers.** Everything derives from data already returned today.
+- Single mock/seed point: `src/data/mockData.ts` gains the
+  `AV Engineering → AIRCRAFT ENGINEERING → {Custom Engineering Services,
+  STC, Aircraft Engineering Continuous Improvement} → {3–5 leaf
+  projects each}` subtree (new ids, e.g. 200+; existing flat projects
+  101–108 left untouched so current AllProjects tests don't shift).
+- Single real-mode swap point: `projectSource.ts`. If backend later
+  exposes a dedicated "subprojects under X" endpoint, only this adapter
+  changes; pages and components stay as-is.
+
+### Size
+
+Medium. Bulk of the work is the `Projects.tsx` rewrite, the new
+drill-down page, and the sidebar nested-sub-link refactor. The mock-data
+extension and tree helpers are small.
+
+---
+
 # Codex-comparison explicit skips
 
 The following Codex patterns were considered and **rejected** because
