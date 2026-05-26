@@ -12,6 +12,8 @@ interface Props {
   title: string;
   range: WeekRange;
   readOnly: boolean;
+  /** Bump to force a re-fetch (e.g. after a time entry is logged). */
+  refreshToken?: number;
   onLogTime: (issue: Issue) => void;
   /** Rendered for each user summary; lets the parent control the card. */
   renderCard: (
@@ -30,6 +32,7 @@ export default function UserHoursSection({
   title,
   range,
   readOnly,
+  refreshToken = 0,
   onLogTime,
   renderCard,
 }: Props) {
@@ -57,8 +60,9 @@ export default function UserHoursSection({
     // We intentionally depend on the primitive range fields rather than the
     // `range` object identity — callers usually compute the range once and
     // pass it down; identity equality would re-fetch on every render.
+    // refreshToken lets the parent force a re-fetch (e.g. after logging time).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.from, range.to]);
+  }, [range.from, range.to, refreshToken]);
 
   // Only users with tasks or hours show up — empty users would just
   // clutter the comparison.

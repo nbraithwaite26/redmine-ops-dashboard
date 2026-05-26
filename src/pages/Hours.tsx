@@ -32,9 +32,9 @@ export default function Hours() {
   // The AddTimeModal lives at the page level so any task row (in either
   // section) can launch it. Pre-seeding lands in commit 3.
   const [logTimeTarget, setLogTimeTarget] = useState<Issue | null>(null);
-  // Bumped after a successful log to force the visible sections to
-  // re-fetch via the loader's range-keyed effect.
-  const [, setReloadKey] = useState(0);
+  // Bumped after a successful log so both week sections (and the team
+  // schedule) re-fetch and the new entry shows without a manual reload.
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Team schedule (Gantt) — scoped to the AIRCRAFT ENGINEERING project tree
   // (CR #16). Allocations come from the scoped /gantt endpoint; issues are
@@ -54,7 +54,7 @@ export default function Hours() {
       setGanttIssues(issues);
       setGanttAllocations(allocations);
     })();
-  }, []);
+  }, [reloadKey]);
 
   return (
     <div className="space-y-6">
@@ -70,6 +70,7 @@ export default function Hours() {
         title="This week"
         range={thisWeek}
         readOnly={readOnly}
+        refreshToken={reloadKey}
         onLogTime={setLogTimeTarget}
         renderCard={(summary, ro, onLog) => (
           <UserHoursCard summary={summary} readOnly={ro} onLogTime={onLog} />
@@ -80,6 +81,7 @@ export default function Hours() {
         title="Last week"
         range={lastWeek}
         readOnly={readOnly}
+        refreshToken={reloadKey}
         onLogTime={setLogTimeTarget}
         renderCard={(summary, ro, onLog) => (
           <UserHoursCard summary={summary} readOnly={ro} onLogTime={onLog} />
