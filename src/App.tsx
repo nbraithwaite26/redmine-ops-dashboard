@@ -54,6 +54,11 @@ export default function App() {
             `/projects/category/:slug` = drill-down into one category (CR #15) */}
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/all" element={<AllProjects />} />
+        {/* Alias the legacy `stc` slug to the canonical `stcs`. */}
+        <Route
+          path="/projects/category/stc"
+          element={<Navigate to="/projects/category/stcs" replace />}
+        />
         <Route path="/projects/category/:slug" element={<ProjectCategory />} />
 
         <Route path="/project-builder" element={<ProjectBuilder />} />

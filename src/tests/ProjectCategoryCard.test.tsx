@@ -28,21 +28,21 @@ describe('<ProjectCategoryCard />', () => {
   it('renders the category name, description, and project count', () => {
     render(
       <MemoryRouter>
-        <ProjectCategoryCard category={makeCategory('STC', 'stc', 4)} />
+        <ProjectCategoryCard category={makeCategory('STCs', 'stcs', 4)} />
       </MemoryRouter>,
     );
-    expect(screen.getByText('STC')).toBeInTheDocument();
-    expect(screen.getByText('STC description')).toBeInTheDocument();
+    expect(screen.getByText('STCs')).toBeInTheDocument();
+    expect(screen.getByText('STCs description')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
   });
 
   it('uses singular wording for a single project', () => {
     render(
       <MemoryRouter>
-        <ProjectCategoryCard category={makeCategory('STC', 'stc', 1)} />
+        <ProjectCategoryCard category={makeCategory('STCs', 'stcs', 1)} />
       </MemoryRouter>,
     );
-    expect(screen.getByLabelText('STC — 1 project')).toBeInTheDocument();
+    expect(screen.getByLabelText('STCs — 1 project')).toBeInTheDocument();
   });
 
   it('navigates to the drill-down route on click', () => {
@@ -51,14 +51,14 @@ describe('<ProjectCategoryCard />', () => {
         <Routes>
           <Route
             path="/projects"
-            element={<ProjectCategoryCard category={makeCategory('STC', 'stc', 4)} />}
+            element={<ProjectCategoryCard category={makeCategory('STCs', 'stcs', 4)} />}
           />
           <Route path="/projects/category/:slug" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByTestId('category-card-stc'));
-    expect(screen.getByTestId('location')).toHaveTextContent('/projects/category/stc');
+    fireEvent.click(screen.getByTestId('category-card-stcs'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/category/stcs');
   });
 
   it('calls onSelect override instead of navigating when provided', () => {
@@ -66,14 +66,14 @@ describe('<ProjectCategoryCard />', () => {
     render(
       <MemoryRouter>
         <ProjectCategoryCard
-          category={makeCategory('STC', 'stc', 4)}
+          category={makeCategory('STCs', 'stcs', 4)}
           onSelect={(c) => {
             picked = c.slug;
           }}
         />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByTestId('category-card-stc'));
-    expect(picked).toBe('stc');
+    fireEvent.click(screen.getByTestId('category-card-stcs'));
+    expect(picked).toBe('stcs');
   });
 });
