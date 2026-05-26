@@ -37,11 +37,40 @@ interface Props {
 
 export default function TicketDrawer({ issue, onClose, onSaved, onDeleted, onQuickEdit }: Props) {
   const [draft, setDraft] = useState<Issue>(issue);
+  const [comment, setComment] = useState('');
+  const [subtaskOpen, setSubtaskOpen] = useState(false);
+  const [subtaskSubject, setSubtaskSubject] = useState('');
   const actions = useIssueActions();
   const { saving } = actions;
   const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
+
+  const postComment = async () => {
+    const body = comment.trim();
+    if (!body) return;
+    try {
+      await actions.comment(issue.id, body);
+      setComment('');
+    } catch {
+      // Toast surfaced by the hook; keep the textarea contents for retry.
+    }
+  };
+
+  const addSubtask = async () => {
+    const subject = subtaskSubject.trim();
+    if (!subject) return;
+    try {
+      await actions.addSubtaskFor(issue.id, {
+        projectId: issue.projectId,
+        subject,
+      });
+      setSubtaskSubject('');
+      setSubtaskOpen(false);
+    } catch {
+      // Toast surfaced; keep the input open so the user can fix and retry.
+    }
+  };
 
   const save = async () => {
     try {
@@ -281,10 +310,25 @@ export default function TicketDrawer({ issue, onClose, onSaved, onDeleted, onQui
           <Section title="Comments / Journal">
             <div className="space-y-2">
               <div className="text-xs text-ink-muted">
-                Comments will appear here once the Redmine journal endpoint is wired up.
+                Existing journal entries aren't surfaced here yet. New comments
+                post to Redmine as journal notes on this issue.
               </div>
-              <textarea className="input" rows={2} placeholder="Add a comment…" />
-              <button className="btn-secondary text-xs">
+              <textarea
+                className="input"
+                rows={2}
+                placeholder="Add a comment…"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                disabled={readOnly}
+                data-testid="ticket-drawer-comment-input"
+              />
+              <button
+                className="btn-secondary text-xs"
+                onClick={postComment}
+                disabled={saving || readOnly || !comment.trim()}
+                title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+                data-testid="ticket-drawer-comment-post"
+              >
                 <MessageSquare size={12} /> Post comment
               </button>
             </div>
@@ -296,9 +340,55 @@ export default function TicketDrawer({ issue, onClose, onSaved, onDeleted, onQui
             <button className="btn-ghost" onClick={() => onQuickEdit?.(issue)}>
               <ExternalLink size={14} /> Quick edit
             </button>
-            <button className="btn-ghost">
-              <Plus size={14} /> Add subtask
-            </button>
+            {subtaskOpen ? (
+              <span
+                className="inline-flex items-center gap-1"
+                data-testid="ticket-drawer-subtask-form"
+              >
+                <input
+                  className="input text-xs py-1 px-2 w-44"
+                  placeholder="Subtask subject"
+                  value={subtaskSubject}
+                  onChange={(e) => setSubtaskSubject(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void addSubtask();
+                    if (e.key === 'Escape') {
+                      setSubtaskOpen(false);
+                      setSubtaskSubject('');
+                    }
+                  }}
+                  data-testid="ticket-drawer-subtask-input"
+                />
+                <button
+                  className="btn-brand text-xs px-2 py-1"
+                  onClick={addSubtask}
+                  disabled={saving || readOnly || !subtaskSubject.trim()}
+                  data-testid="ticket-drawer-subtask-confirm"
+                >
+                  Add
+                </button>
+                <button
+                  className="btn-ghost text-xs px-2 py-1"
+                  onClick={() => {
+                    setSubtaskOpen(false);
+                    setSubtaskSubject('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                className="btn-ghost"
+                onClick={() => setSubtaskOpen(true)}
+                disabled={readOnly}
+                title={readOnly ? 'Read-only mode — writes disabled' : undefined}
+                data-testid="ticket-drawer-subtask-open"
+              >
+                <Plus size={14} /> Add subtask
+              </button>
+            )}
             <button className="btn-ghost">
               <Timer size={14} /> Log time
             </button>
