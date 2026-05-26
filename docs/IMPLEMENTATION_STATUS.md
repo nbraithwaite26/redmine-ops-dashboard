@@ -2,7 +2,39 @@
 
 Snapshot of the work executed against [`docs/INTEGRATION_PLAN.md`](./INTEGRATION_PLAN.md). Section numbers below match the plan's §9 implementation order.
 
-Last updated: 2026-05-26 (Phase 2 + 3 complete — writes fan-out, list-optimistic, custom fields, path cleanup).
+Last updated: 2026-05-26 (Phase 5 polish complete — Phase G responsive sweep + a11y landmarks on Hours accordion).
+
+## Quick handoff for the next session
+
+**Repo state:** clean working tree on `main`. Latest commits (top = newest):
+
+```
+6528ee5  A11y polish: aria-controls + region landmarks on Hours accordion
+5ec6ce3  Phase G: responsive sweep for IssueTable + TimeTracking controls
+64e8573  Refresh IMPLEMENTATION_STATUS to reflect Phase 1-3 completion
+96aba6c  Custom fields write-through: editable in drawer, mapped through PATCH
+79f17ba  Cleanup: fix issue links, wire ?id= deep-link, drop orphaned pages
+ba780f5  Resolve HISTORY_DB against repo root, not CWD
+64e8573  (doc refresh)
+75a2af3 → c5d3233  Phase 1 (Hours) + Phase 2 (writes fan-out) — 7 commits
+46ac7f6 → 1f50c26  Backend workspace + frontend wiring + Admin tabs + docs — 4 commits
+```
+
+**What's left to do.** Two items, both gated on external decisions:
+
+- **Section 13 — Redis-backed stores** (`SessionStore` + `RateLimitStore`). Pure prod-hardening; no observable change in dev because the implementation falls back to in-memory when `REDIS_URL` is unset. Only matters when the backend goes multi-instance or you care about sessions surviving a deploy. Detailed rationale in chat history of the originating session; the short version is "skip until you actually need it." Tracked below.
+- **Section 15 — Final validation against live Redmine.** Requires flipping `REDMINE_READ_ONLY=false` in `.env.local` and restarting the backend. Then smoke every mutation path. Risk: real writes against the connected Redmine instance.
+
+Everything else from plan §9 and the original scope list is shipped, including writes, the Hours redesign, list-optimistic refactor of parent pages, custom-fields write-through, cleanup wart-fixes, responsive sweep, and a11y landmarks.
+
+**Servers (state at session end):**
+- Backend on `:8787` running `npm --workspace server run start`; `mode=read-only`.
+- Vite dev on `:5174` (port may differ — `5173` was busy when the prior agent's session restarted).
+- Both will be down by the time you read this; restart with `npm run dev:all`.
+
+**Decision log (worth knowing):**
+- Scope #15 (`/api/redmine/users/:id/projects`) was **skipped** intentionally. The Hours page derives "the user's projects" from their assigned tasks, which is the correct semantic for that card (a memberships endpoint would surface 0-task projects as noise). If you need a real members endpoint for some other surface, it's a fresh call.
+- The `HISTORY_DB` path now anchors to the repo root via `import.meta.url`. A legacy `server/server/data/` directory may exist on disk from before that fix (it was deleted in the prior session but may regenerate if something starts the backend with the old code). Safe to `rm -rf` if you see it.
 
 ## Section ledger
 
@@ -24,11 +56,12 @@ Last updated: 2026-05-26 (Phase 2 + 3 complete — writes fan-out, list-optimist
 | Hours redesign | plan §1 | ✅ done | Hours page replaced with user-card landing showing this-week + last-week sections. Drilldown: user → projects → tasks. Per-task "Log time" pre-seeds AddTimeModal. AddTimeModal rewritten: no user dropdown, dependent project→task dropdown, past-entries panel, status-bump from `New` → `In Progress` on first time log. `hoursAggregate.ts` + 19 unit tests; `Hours.test.tsx` + 4 tests; `AddTimeModal.test.tsx` + 5 tests. |
 | 12 polish — custom fields write | plan §7.8 | ✅ done | TicketDrawer CustomFields section becomes editable when `!readOnly`. Type-aware inputs (text / number / checkbox). Backend PATCH allowlist gains `customFields[]` mapped to Redmine snake_case `custom_fields` with string-coerced values. |
 | Cleanup batch | scope #18, #19, #20, #21 | ✅ done | HISTORY_DB resolves against repo root (no more `server/server/data/`). `#/my-tasks?id=...` links → `#/tasks?id=...`. `?id=` on `/tasks` auto-opens the drawer once per visit. Orphaned `MyHours.tsx` + `TeamHours.tsx` deleted (redirects in `App.tsx` cover legacy bookmarks). |
-| 13 — Rate-limit production story | §6 Notes | ⏳ not started | Redis-backed `RateLimitStore` + `SessionStore`. Currently in-memory single-process. Toggle behind `REDIS_URL` env var when added. |
+| 13 — Rate-limit production story | §6 Notes | ⏳ not started | Redis-backed `RateLimitStore` + `SessionStore`. Currently in-memory single-process. Toggle behind `REDIS_URL` env var when added. **Recommended skip** for now — only matters under multi-instance deploys. See handoff section above for the full rationale. |
 | 14 — Doc updates | §9 Step 14 | ✅ done | README / ARCHITECTURE / API rewritten to reflect the two-process app. Each new feature commit updates this status doc. |
 | 15 (sub) — users/:id/projects endpoint | scope #15 | ❌ skipped | Reconsidered after Hours shipped. The Hours card requirement is "projects under their tasks" — derive-from-tasks already gives that semantic. A memberships endpoint would surface projects with 0 tasks (noise). Not implementing. |
-| Phase G — Responsive sweep | refactor log | ⏳ not started | Sidebar overlay vs. push on narrow viewports, drawer full-width on mobile, card grid breakpoints, table horizontal-scroll, modal mobile layout |
-| 15 — Final validation | §9 Step 15 | ⏳ not started | After Phase G lands. Flip `REDMINE_READ_ONLY=false`, smoke every mutation path against live Redmine. |
+| Phase G — Responsive sweep | refactor log | ✅ done | IssueTable controls bar flex-wraps; column visibility staged at sm/md/lg breakpoints (essentials always, +project/assignee/spent/%done at md, +start/estimated/next-action at lg); TimeTracking header wraps with shorter mobile labels; TicketDrawer / AddTimeModal / CreateIssueModal already responsive; Hours user-cards already vertical stacks. Verified at 375×812. |
+| A11y polish | scope #25 | ✅ done | Hours accordion: `aria-controls` + `aria-expanded` on toggle buttons, matching `id` + `role="region"` + descriptive `aria-label` on panels; `aria-busy` + `aria-labelledby` on UserHoursSection. Modals already used `useDialogA11y` (focus trap, ESC, restore). |
+| 15 — Final validation | §9 Step 15 | ⏳ not started | Flip `REDMINE_READ_ONLY=false` in `.env.local`, restart backend, smoke every mutation path against live Redmine. Risk: real writes to your Redmine instance — only run when you're ready. |
 
 ## File map (new since the plan started)
 
@@ -190,21 +223,45 @@ Flip mock mode by setting `VITE_MOCK_MODE=true` in `.env.local` and restarting V
 
 ## Pointers for the next session
 
-If picking up Phase G (responsive sweep):
-1. Sidebar already overlays below `md` (Tailwind 768px). Confirm behavior at 360 / 414 / 768 / 1024 / 1280.
-2. Drawer (`TicketDrawer`) is currently `w-[640px]` — needs `w-full sm:w-[640px]` for mobile.
-3. AddTimeModal and CreateIssueModal are `w-[640px] max-w-[95vw]` — already responsive. Verify the past-entries panel on small screens.
-4. `IssueTable` is wrapped in `overflow-x-auto` but the columns are 12-wide; consider hiding ID + project columns below `sm`.
-5. Hours user cards are vertical stacks — already mobile-friendly.
+Phase G is done; Redis and final validation are the only items left.
 
-If picking up Redis (Section 13):
-1. Add `ioredis` to `server/package.json`.
-2. Toggle by `REDIS_URL` env var. Fallback to in-memory when unset (zero behavior change for dev).
-3. `server/src/store/sessionStore.ts` and `server/src/middleware/rateLimit.ts` are the two consumers.
+**If picking up Redis (Section 13):**
+1. Add `ioredis` to `server/package.json` (latest 5.x). Run `npm install` at repo root.
+2. Toggle by `REDIS_URL` env var. Fallback to in-memory when unset — zero behavior change for dev.
+3. Two consumers to swap:
+   - `server/src/store/sessionStore.ts` — in-memory `Map<token, { user, expiresAt }>`. Replace with `SET session:<token> <json> EX <ttlSec>` / `GET session:<token>`.
+   - `server/src/middleware/rateLimit.ts` — process-local token bucket. Replace with atomic `INCR rl:<bucket>` + `EXPIRE rl:<bucket> 60`.
+4. Add server tests that mock `ioredis` and assert the new branch fires when `REDIS_URL` is present.
+5. Document the new env var in `.env.example` and `docs/ARCHITECTURE.md`.
+6. **Honest assessment:** for a single-instance internal-ops deploy, this is over-engineering. Skip unless the deploy target actually fronts multiple backend instances with a load balancer, or the user explicitly wants sessions to survive restarts.
 
-If picking up Section 15 (final validation):
-1. Flip `REDMINE_READ_ONLY=false` in `.env.local`. Restart backend.
-2. Smoke each mutation path end-to-end: update issue, create issue, delete issue, comment, subtask, reparent, log time, edit time, delete time.
-3. Watch the History tab in Admin — sync events should land.
+**If picking up Section 15 (final validation):**
+1. Confirm with the user before touching `REDMINE_READ_ONLY=false` — this enables real writes to their live Redmine.
+2. Flip the env var in `.env.local`, restart the backend.
+3. Smoke each mutation end-to-end (preview at `localhost:5174`):
+   - Update an issue (QuickEdit Save)
+   - Create an issue (Tasks → + New issue)
+   - Delete an issue (TicketDrawer Delete)
+   - Add a comment (TicketDrawer comment)
+   - Add a subtask (TicketDrawer inline form)
+   - Reparent an issue (Parent task field + Save)
+   - Log time (Hours card → Log time)
+   - Edit time (TimeTracking pencil button)
+   - Delete time (TimeTracking trash button)
+   - Custom field edit (TicketDrawer Custom fields section)
+4. Watch the Admin → History tab — every sync should land as a sync event with the right actor + duration.
+5. Flip back to `REDMINE_READ_ONLY=true` when done.
+
+**If something looks unfamiliar:** the integration plan is in `docs/INTEGRATION_PLAN.md`; the architecture overview is in `docs/ARCHITECTURE.md`; the backend API reference is in `docs/API.md`. The README has the "Getting started" + scripts table.
+
+**Validation matrix is reproducible:**
+```bash
+npm run typecheck                          # frontend
+npm --workspace server run typecheck       # backend
+npm run lint                               # 2 pre-existing warnings, no errors
+npm test -- --run                          # 308 / 42
+npm --workspace server run test            # 62 / 11
+npm run build                              # 358 KB JS / 33 KB CSS gzipped
+```
 
 All sections continue to honor the existing guardrails: no company data in the repo, anonymized fixtures, key only on the backend, mock mode preserved, brand and routes intact.
