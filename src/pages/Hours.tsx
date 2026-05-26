@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AddTimeModal from '../components/AddTimeModal';
-import ResourceTimeline from '../components/ResourceTimeline';
+import UserGantt from '../components/UserGantt';
 import UserHoursCard from '../components/UserHoursCard';
 import UserHoursSection from '../components/UserHoursSection';
 import { useReadOnly } from '../hooks/useReadOnly';
@@ -8,7 +8,7 @@ import { weekRange } from '../lib/hoursAggregate';
 import { findProjectByPath } from '../lib/projectTree';
 import { getProjects, getTeamSchedule } from '../services/redmineApi';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
-import type { Issue, ResourceAllocation, User } from '../types/redmine';
+import type { Issue, User } from '../types/redmine';
 
 /**
  * Hours / Time Tracking landing.
@@ -37,22 +37,18 @@ export default function Hours() {
   const [reloadKey, setReloadKey] = useState(0);
 
   // Team schedule (Gantt) — scoped to the AIRCRAFT ENGINEERING project tree
-  // (CR #16). Allocations come from the scoped /gantt endpoint; issues are
-  // filtered to the same tree so the per-user rows stay relevant.
+  // (CR #16). Users are derived from assignees so the chart works even though
+  // /users 403s for non-admin keys.
   const [ganttUsers, setGanttUsers] = useState<User[]>([]);
   const [ganttIssues, setGanttIssues] = useState<Issue[]>([]);
-  const [ganttAllocations, setGanttAllocations] = useState<ResourceAllocation[]>([]);
 
   useEffect(() => {
     (async () => {
       const projects = await getProjects();
       const root = findProjectByPath(projects, DEFAULT_PROJECT_SOURCE.path);
-      // getTeamSchedule derives users from the Gantt rows' assignees, so the
-      // chart populates even though /users 403s for non-admin keys.
-      const { users, issues, allocations } = await getTeamSchedule(root?.id);
+      const { users, issues } = await getTeamSchedule(root?.id);
       setGanttUsers(users);
       setGanttIssues(issues);
-      setGanttAllocations(allocations);
     })();
   }, [reloadKey]);
 
@@ -92,16 +88,11 @@ export default function Hours() {
         <div>
           <h2 className="text-lg font-semibold">Team schedule</h2>
           <p className="text-sm text-ink-muted">
-            Gantt across the team, scoped to the AIRCRAFT ENGINEERING portfolio.
-            Bars are derived from issue start / due dates — issues without both
-            dates won't appear.
+            Select an engineer to see their work, grouped by project and task.
+            Bars run start → due; tasks without both dates won't show a bar.
           </p>
         </div>
-        <ResourceTimeline
-          users={ganttUsers}
-          issues={ganttIssues}
-          allocations={ganttAllocations}
-        />
+        <UserGantt users={ganttUsers} issues={ganttIssues} />
       </section>
 
       {logTimeTarget && (

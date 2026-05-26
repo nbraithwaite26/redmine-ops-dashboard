@@ -37,10 +37,11 @@ describe('<Hours />', () => {
     const gantt = await screen.findByTestId('team-gantt');
     expect(gantt).toBeInTheDocument();
     expect(within(gantt).getByText('Team schedule')).toBeInTheDocument();
-    // ResourceTimeline renders its "Resource allocation" header once mounted.
+    // UserGantt mounts with an engineer selector and a select-first empty state.
     await waitFor(() =>
-      expect(within(gantt).getByText('Resource allocation')).toBeInTheDocument(),
+      expect(within(gantt).getByTestId('gantt-user-select')).toBeInTheDocument(),
     );
+    expect(within(gantt).getByTestId('gantt-empty')).toBeInTheDocument();
   });
 
   it('each section loads, then either renders user cards or an empty state', async () => {
