@@ -22,7 +22,7 @@ import type {
   User,
 } from '../types/redmine';
 import type { RedmineApi } from './redmineApiTypes';
-import { HttpError, httpGet } from './http';
+import { HttpError, httpGet, httpJson } from './http';
 
 interface PaginatedWire<T> {
   items: T[];
@@ -137,6 +137,20 @@ function clearCaches() {
   metadataPromise = null;
   metadataFetchedAt = 0;
   cache.clear();
+}
+
+/**
+ * Invalidate every cache entry that could be stale after a single-issue
+ * mutation: the issue's own detail row, and every list endpoint (since
+ * the new state may affect filters, counts, sort order). Cheaper than
+ * `clearCaches()` because it keeps unrelated GETs warm.
+ */
+function clearIssueCacheFor(id: number) {
+  for (const key of cache.keys()) {
+    if (key.startsWith('/issues') || key === `/issues/${id}`) {
+      cache.delete(key);
+    }
+  }
 }
 
 // ─── Connection / config (UI-side, localStorage) ─────────────────────────
@@ -310,8 +324,35 @@ export const realRedmineApi: RedmineApi = {
   async createIssue(): Promise<Issue> {
     notImplementedWrite('createIssue');
   },
-  async updateIssue(): Promise<Issue> {
-    notImplementedWrite('updateIssue');
+  async updateIssue(id: number, patch: Partial<Issue>): Promise<Issue> {
+    // Build a curated patch body matching the backend's PATCH allowlist.
+    // Unknown fields are silently dropped here so callers (e.g. dialog
+    // Save handlers that pass the entire Issue draft) don't need to know
+    // which fields are editable. Anything we drop is either:
+    //   - server-derived (id, projectId, projectName, createdOn, etc.)
+    //   - not yet supported by the backend (relations, customFields)
+    const body: Record<string, unknown> = {};
+    if (patch.subject !== undefined) body.subject = patch.subject;
+    if (patch.description !== undefined) body.description = patch.description;
+    if (patch.status !== undefined) body.status = patch.status;
+    if (patch.priority !== undefined) body.priority = patch.priority;
+    if (patch.tracker !== undefined) body.tracker = patch.tracker;
+    if ('assignee' in patch) {
+      body.assignedToId = patch.assignee?.id ?? null;
+    }
+    if (patch.startDate !== undefined) body.startDate = patch.startDate;
+    if (patch.dueDate !== undefined) body.dueDate = patch.dueDate;
+    if (patch.estimatedHours !== undefined) body.estimatedHours = patch.estimatedHours;
+    if (patch.doneRatio !== undefined) body.doneRatio = patch.doneRatio;
+    if ('parentIssueId' in patch) body.parentIssueId = patch.parentIssueId;
+    if (patch.nextAction !== undefined && patch.nextAction !== null) {
+      // nextAction is a custom field; not yet writable. Skip silently.
+    }
+
+    const updated = await httpJson<Issue>('PATCH', `/issues/${id}`, body);
+    // Invalidate the cache entries that could now be stale.
+    clearIssueCacheFor(id);
+    return updated;
   },
   async deleteIssue(): Promise<{ id: number }> {
     notImplementedWrite('deleteIssue');

@@ -18,8 +18,8 @@ import {
   mockTrackers,
   mockUsers,
 } from '../data/mockData';
-import { updateIssue } from '../services/redmineApi';
 import { useReadOnly } from '../hooks/useReadOnly';
+import { useSaveIssue } from '../hooks/useSaveIssue';
 
 interface Props {
   issue: Issue;
@@ -30,18 +30,17 @@ interface Props {
 
 export default function TicketDrawer({ issue, onClose, onSaved, onQuickEdit }: Props) {
   const [draft, setDraft] = useState<Issue>(issue);
-  const [saving, setSaving] = useState(false);
+  const { saving, save: saveIssue } = useSaveIssue();
   const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
 
   const save = async () => {
-    setSaving(true);
     try {
-      const updated = await updateIssue(issue.id, draft);
+      const updated = await saveIssue(issue.id, draft);
       onSaved(updated);
-    } finally {
-      setSaving(false);
+    } catch {
+      // Toast surfaced by useSaveIssue; keep the drawer open for retry.
     }
   };
 

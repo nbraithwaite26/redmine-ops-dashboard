@@ -7,9 +7,10 @@ import {
   mockTimeActivities,
   mockUsers,
 } from '../data/mockData';
-import { createTimeEntry, updateIssue } from '../services/redmineApi';
+import { createTimeEntry } from '../services/redmineApi';
 import { useDialogA11y } from '../hooks/useDialogA11y';
 import { useReadOnly } from '../hooks/useReadOnly';
+import { useSaveIssue } from '../hooks/useSaveIssue';
 
 interface Props {
   issue: Issue;
@@ -33,15 +34,14 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
     comments: '',
     spentOn: new Date().toISOString().slice(0, 10),
   });
-  const [saving, setSaving] = useState(false);
+  const { saving, save: saveIssue } = useSaveIssue();
   const { readOnly } = useReadOnly();
 
   useEffect(() => setDraft(issue), [issue]);
 
   const save = async (alsoLogTime: boolean) => {
-    setSaving(true);
     try {
-      const updated = await updateIssue(issue.id, draft);
+      const updated = await saveIssue(issue.id, draft);
       if (alsoLogTime && Number(timeDraft.hours) > 0) {
         await createTimeEntry({
           projectId: updated.projectId,
@@ -54,8 +54,9 @@ export default function QuickEditPopup({ issue, onClose, onSaved, onOpenFullEdit
       }
       onSaved(updated);
       onClose();
-    } finally {
-      setSaving(false);
+    } catch {
+      // Toast already surfaced by useSaveIssue. Keep the popup open so the
+      // user can fix and retry.
     }
   };
 

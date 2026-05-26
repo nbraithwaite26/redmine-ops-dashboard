@@ -65,3 +65,27 @@ export async function httpGet<T>(
   if (!res.ok) throw await parseError(res);
   return (await res.json()) as T;
 }
+
+/**
+ * JSON-body request helper. Use for PATCH/POST/PUT/DELETE against the
+ * backend proxy. Body is serialized as JSON; the response is parsed as
+ * JSON unless empty (which returns `undefined as T`).
+ */
+export async function httpJson<T>(
+  method: 'PATCH' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await parseError(res);
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}

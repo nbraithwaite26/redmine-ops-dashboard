@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import RightPanel from './RightPanel';
 import Sidebar from './Sidebar';
 import StatusBanner from './StatusBanner';
+import ToastHost from './ToastHost';
 import TopBar from './TopBar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSidebarCollapse } from '../hooks/useSidebarCollapse';
@@ -163,6 +164,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
         {showRightPanel && <RightPanel />}
       </div>
+      <ToastHost />
     </div>
   );
 }
