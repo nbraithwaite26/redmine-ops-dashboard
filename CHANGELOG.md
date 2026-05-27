@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — CR #25: engineers-out time-off calendar (UI) (2026-05-27)
+
+- **Engineers-out card** — the Engineers metric becomes `EngineersOutCard`
+  ("N out this week", week-scoped), which morphs (shared `layoutId`) into a
+  full-screen `TimeOffDetail` calendar.
+- **Time-off calendar** — week ⇄ month toggle (default week), prev/next
+  navigation, entries color-coded by leave type with a legend
+  (`lib/timeOff.ts`).
+- **Data seam** — new `getTimeOff(range)`. Leave is not a Redmine time activity
+  on this instance, so mock mode is seeded and **real mode returns empty until
+  the AE-calendar source is wired** (`realRedmineApi.getTimeOff` TODO).
+
 ### Changed — CR #24: Dashboard card rings + week-driven team hours (2026-05-27)
 
 - **Rings only on hours cards.** `DashboardCard` gained a `ring` opt-out; the

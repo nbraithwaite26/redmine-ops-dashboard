@@ -25,9 +25,52 @@ import type {
   Issue,
   Project,
   TimeEntry,
+  TimeOffEntry,
   User,
 } from '../types/redmine';
 import type { RedmineApi } from './redmineApiTypes';
+
+// ─── Seeded time-off (leave is not a Redmine time activity; see getTimeOff) ──
+function mondayOf(ref: Date): Date {
+  const day = ref.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  const m = new Date(ref);
+  m.setDate(ref.getDate() + offset);
+  m.setHours(0, 0, 0, 0);
+  return m;
+}
+
+function isoAddDays(base: Date, days: number): string {
+  const d = new Date(base);
+  d.setDate(base.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Leave entries spread across the current + next week, anchored to MOCK_TODAY. */
+function buildMockTimeOff(): TimeOffEntry[] {
+  const monday = mondayOf(new Date(MOCK_TODAY));
+  const pick = (i: number): User => mockUsers[i % mockUsers.length];
+  // [userIndex, dayOffsetFromThisMonday, type]
+  const seed: Array<[number, number, string]> = [
+    [0, 1, 'Vacation'],
+    [0, 2, 'Vacation'],
+    [1, 0, 'Personal Time'],
+    [2, 3, 'Customer Visit'],
+    [3, 4, 'Holiday'],
+    // next week
+    [1, 8, 'Vacation'],
+    [4, 9, 'Customer Visit'],
+    [0, 10, 'Vacation'],
+    [2, 11, 'Personal Time'],
+  ];
+  return seed.map(([ui, off, type], idx) => ({
+    id: 9000 + idx,
+    user: pick(ui),
+    date: isoAddDays(monday, off),
+    type,
+    hours: 8,
+  }));
+}
 
 // In-memory mutable copies so the UI can simulate edits.
 let issues: Issue[] = [...mockIssues];
@@ -296,6 +339,11 @@ export const mockRedmineApi: RedmineApi = {
 
   async getTeamSchedule(_projectId?: number) {
     return wait({ users: mockUsers, issues, allocations: mockAllocations });
+  },
+
+  async getTimeOff(range: { from: string; to: string }) {
+    const all = buildMockTimeOff();
+    return wait(all.filter((e) => e.date >= range.from && e.date <= range.to));
   },
 
   // ─── Directory ───────────────────────────────────────────────────────

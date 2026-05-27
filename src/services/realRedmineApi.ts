@@ -18,6 +18,7 @@ import type {
   ProjectStatus,
   ResourceAllocation,
   TimeEntry,
+  TimeOffEntry,
   Tracker,
   User,
 } from '../types/redmine';
@@ -672,6 +673,15 @@ export const realRedmineApi: RedmineApi = {
       allocations.push(ganttRowToAllocation(row));
     }
     return { users: [...userMap.values()], issues, allocations };
+  },
+
+  async getTimeOff(_range: { from: string; to: string }): Promise<TimeOffEntry[]> {
+    // TODO(real source): leave/out-of-office is NOT a Redmine time activity on
+    // this instance (the /metadata activity list is all work codes). It lives
+    // in the separate "AE calendar" module — confirm its plugin/endpoint and
+    // field shape, then map it here. Returns empty until wired so the feature
+    // degrades gracefully in real mode.
+    return [];
   },
 
   async getDirectoryLinks(): Promise<DirectoryLink[]> {

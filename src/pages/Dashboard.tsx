@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, MotionConfig } from 'framer-motion';
 import DashboardCard from '../components/DashboardCard';
 import DashboardProjectHealth from '../components/DashboardProjectHealth';
 import DashboardResourcePlanning from '../components/DashboardResourcePlanning';
+import EngineersOutCard from '../components/EngineersOutCard';
 import TeamWorkPanel, { type WeekOffset } from '../components/TeamWorkPanel';
+import TimeOffDetail from '../components/TimeOffDetail';
 import type { Issue } from '../types/redmine';
-import { getIssues, getPastDueIssues, getTimeEntries } from '../services/redmineApi';
+import {
+  getIssues,
+  getPastDueIssues,
+  getTimeEntries,
+  getTimeOff,
+} from '../services/redmineApi';
 import { buildTeamMetrics } from '../data/mockData';
 import { weekRange } from '../lib/hoursAggregate';
+import { distinctEngineersOut } from '../lib/timeOff';
 import { today } from '../lib/format';
 
 // Team-first Overview. Personal work (my tasks / my hours) now lives on the
@@ -28,6 +37,8 @@ export default function Dashboard() {
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
   const [teamLogged, setTeamLogged] = useState(0);
+  const [outCount, setOutCount] = useState(0);
+  const [timeOffOpen, setTimeOffOpen] = useState(false);
 
   // Issue counts are not week-scoped — load once.
   useEffect(() => {
@@ -51,6 +62,19 @@ export default function Dashboard() {
       if (cancelled) return;
       const total = entries.reduce((sum, e) => sum + e.hours, 0);
       setTeamLogged(Math.round(total * 10) / 10);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [range.from, range.to]);
+
+  // Engineers out in the selected week (drives the Engineers-out card).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const off = await getTimeOff({ from: range.from, to: range.to });
+      if (cancelled) return;
+      setOutCount(distinctEngineersOut(off));
     })();
     return () => {
       cancelled = true;
@@ -105,14 +129,27 @@ export default function Dashboard() {
       </div>
 
       {tab === 'Team' && (
-        <>
+        <MotionConfig reducedMotion="user">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {teamMetrics.map((metric) => (
-              <DashboardCard key={metric.id} metric={metric} />
-            ))}
+            {teamMetrics.map((metric) =>
+              metric.id === 'team-engineers' ? (
+                <EngineersOutCard
+                  key={metric.id}
+                  outCount={outCount}
+                  total={Number(metric.value)}
+                  onSelect={() => setTimeOffOpen(true)}
+                />
+              ) : (
+                <DashboardCard key={metric.id} metric={metric} />
+              ),
+            )}
           </div>
           <TeamWorkPanel week={week} onWeekChange={setWeek} />
-        </>
+
+          <AnimatePresence>
+            {timeOffOpen && <TimeOffDetail onClose={() => setTimeOffOpen(false)} />}
+          </AnimatePresence>
+        </MotionConfig>
       )}
 
       {tab === 'Project Health' && <DashboardProjectHealth />}

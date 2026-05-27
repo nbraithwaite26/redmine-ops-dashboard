@@ -92,6 +92,23 @@ export interface TimeEntry {
   updatedOn: string;
 }
 
+/**
+ * A single engineer's out-of-office / time-off entry for a day. `type` is the
+ * leave category (e.g. "Vacation", "Personal Time", "Holiday", "Customer
+ * Visit"); colors are mapped from it in lib/timeOff.ts. Sourced separately
+ * from work time entries (see getTimeOff).
+ */
+export interface TimeOffEntry {
+  id: number;
+  user: User;
+  /** ISO YYYY-MM-DD. */
+  date: string;
+  /** Leave / out-of-office category. */
+  type: string;
+  /** Hours out that day (full day ≈ 8). */
+  hours: number;
+}
+
 export type AllocationType = 'Auto' | 'Manual' | 'Vacation' | 'Reserved';
 
 export interface ResourceAllocation {

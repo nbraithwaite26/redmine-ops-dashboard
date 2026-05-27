@@ -6,6 +6,7 @@ import type {
   Project,
   ResourceAllocation,
   TimeEntry,
+  TimeOffEntry,
   User,
 } from '../types/redmine';
 
@@ -72,6 +73,13 @@ export interface RedmineApi {
   getWeeklyHours(userId?: number): Promise<{ logged: number; target: number }>;
   getTeamHours(): Promise<{ logged: number; target: number }>;
   getResourceAllocations(projectId?: number): Promise<ResourceAllocation[]>;
+  /**
+   * Engineers' out-of-office / time-off entries overlapping the date range.
+   * Sourced separately from work time entries (leave is not a Redmine time
+   * activity on this instance). Real-mode wiring is pending the AE-calendar
+   * source; see realRedmineApi.getTimeOff.
+   */
+  getTimeOff(range: { from: string; to: string }): Promise<TimeOffEntry[]>;
   /**
    * Team Gantt inputs derived from a single scoped /gantt fetch. Unlike
    * getUsers() (which 403s for non-admin keys), the user list here is

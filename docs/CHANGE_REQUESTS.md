@@ -16,7 +16,22 @@ Status legend:
 
 ## #25 — Engineers-out time-off calendar
 
-**Status:** 📝 Plan drafted, awaiting approval (not yet coded)
+**Status:** ✅ UI shipped (2026-05-27) — real-mode data source still pending
+
+**Build notes:** Fetching the live activity list confirmed leave is **not** a
+Redmine time activity here (the `/metadata` list is all work codes). So the UI
+was built behind a `getTimeOff(range)` seam: **mock mode** is seeded
+(Vacation / Personal Time / Holiday / Customer Visit across this + next week);
+**real mode returns `[]`** until the AE-calendar source is wired (see
+`realRedmineApi.getTimeOff` TODO). Shipped: `EngineersOutCard` (replaces the
+Engineers metric, shows "N out this week", `layoutId` morph) → `TimeOffDetail`
+full-screen calendar with a week ⇄ month toggle (default week), prev/next
+navigation, color-coded entries + legend (`lib/timeOff.ts`), and
+dismiss/reduced-motion. The out-count is week-scoped (follows the dashboard
+week toggle).
+
+**Still needed for real data:** the AE-calendar plugin/endpoint + field shape
+(paused here per the request — will ask again with specifics before wiring).
 
 **Request:** Make the Dashboard "Engineers" card show how many engineers will
 be out that week. Clicking it springs up (same morph as the team cards) into a

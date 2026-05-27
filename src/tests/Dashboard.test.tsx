@@ -29,7 +29,8 @@ describe('<Dashboard /> (team-first)', () => {
     );
     // Team-scoped metric cards.
     expect(await screen.findByText('Team tasks')).toBeInTheDocument();
-    expect(screen.getByText('Engineers')).toBeInTheDocument();
+    // The Engineers slot is the dedicated out-of-office card.
+    expect(screen.getByTestId('engineers-out-card')).toBeInTheDocument();
     // The engineer panel renders.
     expect(screen.getByTestId('team-work-panel')).toBeInTheDocument();
     // Personal content is gone — it lives on Tasks/Hours now.
@@ -46,8 +47,10 @@ describe('<Dashboard /> (team-first)', () => {
     );
     // Only "Team hours …" keeps a donut ring.
     await waitFor(() => expect(screen.getAllByTestId('conic-ring').length).toBe(1));
-    // The other 7 team metric cards render a plain number.
-    expect(screen.getAllByTestId('metric-number').length).toBe(7);
+    // Six DashboardCard count cards render a plain number (the Engineers slot
+    // is the dedicated out-of-office card).
+    expect(screen.getAllByTestId('metric-number').length).toBe(6);
+    expect(screen.getByTestId('engineers-out-card')).toBeInTheDocument();
   });
 
   it('shows project category cards on the Project Health tab', async () => {
