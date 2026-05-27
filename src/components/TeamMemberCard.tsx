@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
 import { FolderKanban, ListChecks } from 'lucide-react';
-import type { TeamUserRow } from '../lib/hoursAggregate';
+import type { UserHoursSummary } from '../lib/hoursAggregate';
 import { formatHours } from '../lib/format';
 import { avatarGradient, initials } from '../lib/avatar';
 
 interface Props {
-  row: TeamUserRow;
+  summary: UserHoursSummary;
   onSelect: () => void;
 }
 
@@ -13,11 +13,11 @@ interface Props {
  * Collapsed preview card for one engineer (CR: card-expand interaction).
  * Shares `layoutId`s with TeamMemberDetail so tapping morphs this card into
  * the full-screen sheet with spatial continuity. The gradient/initials hero
- * is the dominant motion anchor.
+ * is the dominant motion anchor. Hours shown are logged in the selected week.
  */
-export default function TeamMemberCard({ row, onSelect }: Props) {
-  const { user } = row;
-  const topProject = row.projects[0]?.projectName;
+export default function TeamMemberCard({ summary, onSelect }: Props) {
+  const { user } = summary;
+  const topProject = summary.projects[0]?.projectName;
 
   return (
     <motion.button
@@ -28,7 +28,7 @@ export default function TeamMemberCard({ row, onSelect }: Props) {
       style={{ borderRadius: 20 }}
       className="card overflow-hidden p-0 text-left flex flex-col focus:outline-none focus:ring-2 focus:ring-brand-300"
       data-testid={`member-card-${user.id}`}
-      aria-label={`${user.name} — ${row.projectCount} projects, ${row.taskCount} tasks. Tap to expand.`}
+      aria-label={`${user.name} — ${summary.projectCount} projects, ${summary.taskCount} tasks. Tap to expand.`}
     >
       <motion.div
         layoutId={`member-hero-${user.id}`}
@@ -52,15 +52,15 @@ export default function TeamMemberCard({ row, onSelect }: Props) {
       <div className="flex flex-col gap-2 p-4">
         <div className="flex items-center gap-3 text-xs text-ink-muted">
           <span className="inline-flex items-center gap-1">
-            <FolderKanban size={12} /> {row.projectCount} projects
+            <FolderKanban size={12} /> {summary.projectCount} projects
           </span>
           <span className="inline-flex items-center gap-1">
-            <ListChecks size={12} /> {row.taskCount} tasks
+            <ListChecks size={12} /> {summary.taskCount} tasks
           </span>
         </div>
         <div className="text-sm">
-          <span className="font-semibold tabular-nums">{formatHours(row.spentHours)}</span>
-          <span className="text-ink-muted"> / {formatHours(row.estimatedHours)} expected</span>
+          <span className="font-semibold tabular-nums">{formatHours(summary.totalHours)}</span>
+          <span className="text-ink-muted"> logged</span>
         </div>
         {topProject && (
           <div className="truncate text-xs text-ink-soft">Top: {topProject}</div>

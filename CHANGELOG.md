@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — CR #24: Dashboard card rings + week-driven team hours (2026-05-27)
+
+- **Rings only on hours cards.** `DashboardCard` gained a `ring` opt-out; the
+  team + Home count cards now render a plain number, and the donut ring is
+  reserved for the hours cards (my hours / team hours).
+- **Week toggle drives team hours.** The This week / Last week selection is
+  lifted to the Dashboard, so switching weeks updates both the engineer cards
+  *and* the "Team hours" metric card (now week-scoped, summed from time
+  entries, with a "this week" / "last week" title).
+
+### Changed — CR #23: engineer detail collapse, logged-hours, week switcher (2026-05-27)
+
+Refinements to the Team page engineer cards/detail.
+
+- **Collapsible projects in the detail view.** The full-screen engineer sheet
+  (`TeamMemberDetail`) now lists projects collapsed; each expands to reveal its
+  subtasks (with per-task logged hours).
+- **Logged hours, not expected.** The card and detail drop the "expected"
+  (estimated) figure and show only hours *logged*.
+- **Week switcher.** A This week / Last week control on the Team members panel
+  re-scopes the logged hours. The panel now derives hours via `aggregateHours`
+  (time-entry based, week-filtered) instead of cumulative issue spent-hours,
+  and re-fetches time entries when the week changes.
+- **Team metric swap.** Replaced the "Avg load" team metric card with "Due this
+  week" (count of open issues due within the next 7 days, from `buildTeamMetrics`).
+
+### Changed — CR #22: team-first Dashboard, personal-first Tasks & Hours (2026-05-27)
+
+Rebalanced where team vs. individual work lives.
+
+- **Dashboard is now team-first.** Dropped the personal "Your Work" tab; the
+  landing leads with team metrics (`buildTeamMetrics`) + the engineer cards
+  (`TeamWorkPanel`). Tabs are now Team (default) / Project Health / Resource
+  Planning. Personal metrics + the My Tasks table were removed from the
+  Dashboard (they live on Tasks/Hours now).
+- **Tasks is personal-first.** Defaults to "My tasks" only; the team
+  (`GroupedTaskTable`) view is behind a persisted "Show team tasks" toggle and
+  its data is fetched lazily on first reveal.
+- **Hours is personal-first.** Defaults to the this-week / last-week personal
+  sections; the team schedule is behind a persisted "Show team schedule"
+  toggle and the ~700-row gantt is fetched lazily on first reveal (no longer
+  on every Hours visit).
+
 ### Added — CR #19: Team's Work redesign + card-expand interaction (2026-05-27)
 
 The Dashboard "Your Team's Work" tab becomes a team-centric view. Added

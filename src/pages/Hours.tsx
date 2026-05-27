@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Users } from 'lucide-react';
 import AddTimeModal from '../components/AddTimeModal';
 import TeamHours from '../components/TeamHours';
 import UserHoursCard from '../components/UserHoursCard';
@@ -10,40 +11,53 @@ import { getProjects, getTeamSchedule } from '../services/redmineApi';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
 import type { Issue, User } from '../types/redmine';
 
+const TEAM_PREF_KEY = 'rod.hours.showTeam';
+
 /**
- * Hours / Time Tracking landing.
+ * Hours / Time Tracking landing — personal-first.
  *
- * Two stacked sections:
- *   - This week  (Monday → today)
- *   - Last week  (the full previous Monday → Sunday block)
- *
- * Each section renders user cards. Cards expand into projects; projects
- * expand into tasks; each task has a Log time button that opens the
- * AddTimeModal. Both sections use the same card layout so users can
- * compare current vs. prior week without a context switch.
+ * Two stacked sections (this week, last week) of the current user's hours.
+ * The team schedule (Gantt across the AIRCRAFT ENGINEERING portfolio) is
+ * opt-in behind a toggle, and is only fetched when first shown — that fetch
+ * paginates ~700 rows live, so deferring it keeps the personal page fast.
  */
 export default function Hours() {
   const { readOnly } = useReadOnly();
 
-  // Compute once per mount — these are date ranges, not reactive state.
   const thisWeek = useMemo(() => weekRange(0), []);
   const lastWeek = useMemo(() => weekRange(-1), []);
 
-  // The AddTimeModal lives at the page level so any task row (in either
-  // section) can launch it. Pre-seeding lands in commit 3.
   const [logTimeTarget, setLogTimeTarget] = useState<Issue | null>(null);
-  // Bumped after a successful log so both week sections (and the team
-  // schedule) re-fetch and the new entry shows without a manual reload.
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Team schedule (Gantt) — scoped to the AIRCRAFT ENGINEERING project tree
-  // (CR #16). Users are derived from assignees so the chart works even though
-  // /users 403s for non-admin keys.
+  // Team schedule is opt-in (personal-first page). Persist the choice.
+  const [showTeam, setShowTeam] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TEAM_PREF_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleTeam = () =>
+    setShowTeam((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(TEAM_PREF_KEY, next ? '1' : '0');
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+
   const [ganttUsers, setGanttUsers] = useState<User[]>([]);
   const [ganttIssues, setGanttIssues] = useState<Issue[]>([]);
-  const [teamLoading, setTeamLoading] = useState(true);
+  const [teamLoading, setTeamLoading] = useState(false);
 
+  // Fetch the team schedule only while the team view is shown. Users are
+  // derived from assignees so the chart works even though /users 403s for
+  // non-admin keys (CR #16). Refetches when reloadKey bumps after a log.
   useEffect(() => {
+    if (!showTeam) return;
     let cancelled = false;
     setTeamLoading(true);
     (async () => {
@@ -58,15 +72,14 @@ export default function Hours() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [showTeam, reloadKey]);
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Hours</h1>
         <p className="text-sm text-ink-muted">
-          Per-engineer summary of this week and last week. Click a card to drill into
-          projects and tasks.
+          Your hours this week and last week. Click a card to drill into projects and tasks.
         </p>
       </header>
 
@@ -92,13 +105,31 @@ export default function Hours() {
         )}
       />
 
-      <TeamHours
-        users={ganttUsers}
-        issues={ganttIssues}
-        loading={teamLoading}
-        readOnly={readOnly}
-        onLogTime={setLogTimeTarget}
-      />
+      <section>
+        <button
+          type="button"
+          onClick={toggleTeam}
+          className="flex items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink"
+          aria-expanded={showTeam}
+          data-testid="hours-team-toggle"
+        >
+          {showTeam ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Users size={14} />
+          {showTeam ? 'Hide team schedule' : 'Show team schedule'}
+        </button>
+
+        {showTeam && (
+          <div className="mt-3">
+            <TeamHours
+              users={ganttUsers}
+              issues={ganttIssues}
+              loading={teamLoading}
+              readOnly={readOnly}
+              onLogTime={setLogTimeTarget}
+            />
+          </div>
+        )}
+      </section>
 
       {logTimeTarget && (
         <AddTimeModal

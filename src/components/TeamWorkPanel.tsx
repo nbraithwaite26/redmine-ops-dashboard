@@ -1,34 +1,54 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, LayoutGroup, MotionConfig } from 'framer-motion';
+import clsx from 'clsx';
 import TeamMemberCard from './TeamMemberCard';
 import TeamMemberDetail from './TeamMemberDetail';
 import TeamMemberSelector from './TeamMemberSelector';
-import { aggregateTeamFromIssues } from '../lib/hoursAggregate';
+import { aggregateHours, weekRange } from '../lib/hoursAggregate';
 import { findProjectByPath } from '../lib/projectTree';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
-import { getProjects, getTeamSchedule } from '../services/redmineApi';
+import { getProjects, getTeamSchedule, getTimeEntries } from '../services/redmineApi';
 import {
   defaultSelectedUserIds,
   loadSelection,
   saveSelection,
 } from '../lib/teamSelection';
-import type { Issue, User } from '../types/redmine';
+import type { Issue, TimeEntry, User } from '../types/redmine';
+
+export type WeekOffset = 0 | -1;
+
+interface Props {
+  /** Controlled week selection. When omitted, the panel manages its own. */
+  week?: WeekOffset;
+  onWeekChange?: (week: WeekOffset) => void;
+}
 
 /**
  * "Your Team's Work" body: a selectable grid of engineer cards. Each card
  * expands into a full-screen detail sheet (Framer Motion shared layout).
- * Engineers + their per-project workload are derived from assignees via
+ *
+ * Engineers + their projects/tasks are derived from assignees via
  * getTeamSchedule (scoped to the AIRCRAFT ENGINEERING tree) so it works
- * without the admin-only /users endpoint.
+ * without the admin-only /users endpoint. Hours shown are the hours *logged*
+ * in the selected week (this / last), computed from time entries via
+ * aggregateHours — the same week-scoped aggregation the Hours page uses.
  */
-export default function TeamWorkPanel() {
+export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = {}) {
+  // Controlled by the parent when props are supplied; otherwise self-managed.
+  const [weekState, setWeekState] = useState<WeekOffset>(0);
+  const week = weekProp ?? weekState;
+  const setWeek = onWeekChange ?? setWeekState;
+  const range = useMemo(() => weekRange(week), [week]);
+
   const [users, setUsers] = useState<User[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   // null = not yet initialized from storage/defaults.
   const [selectedIds, setSelectedIds] = useState<number[] | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
 
+  // Roster + issues load once (independent of the selected week).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -45,10 +65,28 @@ export default function TeamWorkPanel() {
     };
   }, []);
 
-  const rows = useMemo(() => aggregateTeamFromIssues(users, issues), [users, issues]);
+  // Time entries are re-fetched whenever the selected week changes.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const e = await getTimeEntries({ from: range.from, to: range.to });
+      if (cancelled) return;
+      setEntries(e);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [range.from, range.to]);
+
+  // Week-scoped per-user → per-project → per-task summaries. Keep only
+  // engineers who actually have assigned work.
+  const rows = useMemo(
+    () => aggregateHours(users, issues, entries, range).filter((s) => s.taskCount > 0),
+    [users, issues, entries, range],
+  );
 
   // Initialize selection once the roster lands: persisted choice (pruned to
-  // engineers that still exist) wins, else the first-name defaults.
+  // engineers that still exist) wins, else the first-name/login defaults.
   useEffect(() => {
     if (rows.length === 0) return;
     setSelectedIds((prev) => {
@@ -76,7 +114,6 @@ export default function TeamWorkPanel() {
   const updateSelection = (ids: number[]) => {
     setSelectedIds(ids);
     saveSelection(ids);
-    // Close the detail if its engineer was just deselected.
     if (openId !== null && !ids.includes(openId)) setOpenId(null);
   };
 
@@ -87,14 +124,47 @@ export default function TeamWorkPanel() {
           <div>
             <h2 className="text-lg font-semibold">Team members</h2>
             <p className="text-xs text-ink-muted">
-              Tap an engineer to expand their workload. Use the selector to choose who appears.
+              Hours logged {week === 0 ? 'this week' : 'last week'} ({range.label}). Tap an
+              engineer to expand their workload.
             </p>
           </div>
-          <TeamMemberSelector
-            users={rows.map((r) => r.user)}
-            selected={effectiveSelected}
-            onChange={updateSelection}
-          />
+          <div className="flex items-center gap-2">
+            <div
+              className="inline-flex overflow-hidden rounded-md border border-gray-200 text-sm"
+              role="group"
+              aria-label="Week"
+            >
+              <button
+                type="button"
+                onClick={() => setWeek(0)}
+                aria-pressed={week === 0}
+                data-testid="team-week-this"
+                className={clsx(
+                  'px-3 py-1.5',
+                  week === 0 ? 'bg-brand-500 text-white' : 'text-ink-muted hover:text-ink',
+                )}
+              >
+                This week
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeek(-1)}
+                aria-pressed={week === -1}
+                data-testid="team-week-last"
+                className={clsx(
+                  'border-l border-gray-200 px-3 py-1.5',
+                  week === -1 ? 'bg-brand-500 text-white' : 'text-ink-muted hover:text-ink',
+                )}
+              >
+                Last week
+              </button>
+            </div>
+            <TeamMemberSelector
+              users={rows.map((r) => r.user)}
+              selected={effectiveSelected}
+              onChange={updateSelection}
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -113,7 +183,7 @@ export default function TeamWorkPanel() {
               {visibleRows.map((row) => (
                 <TeamMemberCard
                   key={row.user.id}
-                  row={row}
+                  summary={row}
                   onSelect={() => setOpenId(row.user.id)}
                 />
               ))}
@@ -123,7 +193,7 @@ export default function TeamWorkPanel() {
               {openRow && (
                 <TeamMemberDetail
                   key={openRow.user.id}
-                  row={openRow}
+                  summary={openRow}
                   onClose={() => setOpenId(null)}
                 />
               )}

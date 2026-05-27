@@ -160,4 +160,7 @@ export interface DashboardMetric {
   caption?: string;
   /** If set, the card becomes clickable and navigates here. */
   route?: string;
+  /** When false, render the value as a plain number instead of a donut ring.
+   *  Rings are reserved for progress-to-target metrics (e.g. hours / target). */
+  ring?: boolean;
 }

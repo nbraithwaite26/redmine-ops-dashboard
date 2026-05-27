@@ -23,12 +23,14 @@ describe('<Tasks /> page', () => {
     expect(screen.getByText(/team tasks/i)).toBeInTheDocument();
   });
 
-  it('renders the GroupedTaskTable below My tasks', async () => {
+  it('renders the GroupedTaskTable once the team view is expanded', async () => {
     render(
       <MemoryRouter>
         <Tasks />
       </MemoryRouter>,
     );
+    // Team view is opt-in now — reveal it first.
+    fireEvent.click(await screen.findByTestId('tasks-team-toggle'));
     await waitFor(() =>
       expect(screen.getByTestId('grouped-task-table')).toBeInTheDocument(),
     );

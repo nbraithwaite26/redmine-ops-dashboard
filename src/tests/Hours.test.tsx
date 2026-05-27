@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Hours from '../pages/Hours';
@@ -14,6 +14,8 @@ import Hours from '../pages/Hours';
  * fixture tweaks.
  */
 describe('<Hours />', () => {
+  beforeEach(() => localStorage.clear());
+
   function renderHours() {
     return render(
       <MemoryRouter initialEntries={['/hours']}>
@@ -32,10 +34,14 @@ describe('<Hours />', () => {
     expect(screen.getByTestId('hours-section--1')).toBeInTheDocument();
   });
 
-  it('renders the Team Hours section with a Card/List view selector', async () => {
+  it('hides the team schedule until the toggle is clicked', async () => {
     renderHours();
+    // Personal-first: no team section on initial render.
+    expect(screen.queryByTestId('team-hours')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('hours-team-toggle'));
+
     const team = await screen.findByTestId('team-hours');
-    expect(team).toBeInTheDocument();
     expect(within(team).getByText('Team schedule')).toBeInTheDocument();
     // View selector defaults to Card.
     await waitFor(() => {

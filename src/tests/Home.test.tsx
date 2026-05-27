@@ -47,10 +47,11 @@ describe('<Home /> Codex-style landing', () => {
     );
     const metricsBlock = screen.getByTestId('home-headline-metrics');
     expect(metricsBlock).toBeInTheDocument();
-    // 4 conic rings — one per headline metric card.
+    // Rings are reserved for the hours cards (my hours + team hours); the
+    // other two headline cards render plain numbers.
     expect(
       metricsBlock.querySelectorAll('[data-testid="conic-ring"]'),
-    ).toHaveLength(4);
+    ).toHaveLength(2);
   });
 
   it('renders the Recently opened workspaces grid', () => {

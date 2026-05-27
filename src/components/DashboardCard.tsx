@@ -46,10 +46,22 @@ export default function DashboardCard(props: Props) {
       onClick ?? (metric.route ? () => navigate(metric.route!) : undefined);
     const valueLabel =
       metric.total !== undefined ? `${metric.value}/${metric.total}` : `${metric.value}`;
+    // Rings are reserved for progress-to-target metrics (hours cards). Count
+    // cards opt out via `ring: false` and show a plain number instead.
+    const showRing = metric.ring !== false;
     return (
       <CardShell title={metric.title} onClick={handle}>
         <div className="flex-1 flex flex-col items-center justify-center py-3 gap-1">
-          <ConicRing progress={metric.progress} color={metric.color} label={valueLabel} />
+          {showRing ? (
+            <ConicRing progress={metric.progress} color={metric.color} label={valueLabel} />
+          ) : (
+            <div
+              className="py-3 text-4xl font-semibold tabular-nums text-ink"
+              data-testid="metric-number"
+            >
+              {valueLabel}
+            </div>
+          )}
           {metric.caption && (
             <div className="text-xs text-ink-muted">{metric.caption}</div>
           )}

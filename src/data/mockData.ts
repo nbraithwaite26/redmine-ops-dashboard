@@ -679,7 +679,7 @@ export function buildDashboardMetrics({
   const projectsAtRisk = 2; // mock — derived from project status in real impl
   const openKpis = 7; // mock — would come from a KPI tracker plugin
 
-  return [
+  const cards: DashboardMetric[] = [
     {
       id: 'tasks-assigned',
       title: 'Tasks assigned to you',
@@ -769,6 +769,11 @@ export function buildDashboardMetrics({
       route: '/reports',
     },
   ];
+
+  // Rings only on the hours cards (my hours + team hours); the rest show a
+  // plain number.
+  const RING_IDS = new Set(['hours-week', 'team-hours-week']);
+  return cards.map((c) => (RING_IDS.has(c.id) ? c : { ...c, ring: false }));
 }
 
 interface TeamMetricInputs {
@@ -776,7 +781,11 @@ interface TeamMetricInputs {
   allIssues: Issue[];
   /** Count of overdue team issues. */
   pastDueCount: number;
+  /** Count of open team issues due within the next 7 days. */
+  dueThisWeekCount: number;
   teamHours: { logged: number; target: number };
+  /** Week label for the team-hours card title, e.g. "this week" / "last week". */
+  teamHoursWeekLabel?: string;
 }
 
 /**
@@ -789,7 +798,9 @@ interface TeamMetricInputs {
 export function buildTeamMetrics({
   allIssues,
   pastDueCount,
+  dueThisWeekCount,
   teamHours,
+  teamHoursWeekLabel = 'this week',
 }: TeamMetricInputs): DashboardMetric[] {
   const inProgressCount = allIssues.filter((i) => i.status === 'In Progress').length;
   const unassignedCount = allIssues.filter((i) => !i.assignee).length;
@@ -798,10 +809,8 @@ export function buildTeamMetrics({
     allIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
   );
   const engineerCount = engineerIds.size;
-  const assignedCount = allIssues.length - unassignedCount;
-  const avgLoad = engineerCount > 0 ? Math.round(assignedCount / engineerCount) : 0;
 
-  return [
+  const cards: DashboardMetric[] = [
     {
       id: 'team-tasks',
       title: 'Team tasks',
@@ -846,7 +855,7 @@ export function buildTeamMetrics({
     },
     {
       id: 'team-hours-week',
-      title: 'Team hours this week',
+      title: `Team hours ${teamHoursWeekLabel}`,
       value: teamHours.logged,
       total: teamHours.target,
       progress: safePercent(teamHours.logged, teamHours.target),
@@ -867,14 +876,14 @@ export function buildTeamMetrics({
       caption: 'on the team',
     },
     {
-      id: 'team-avg-load',
-      title: 'Avg load',
-      value: avgLoad,
-      progress: safePercent(avgLoad, Math.max(avgLoad, 10)),
-      statusLabel: 'Tasks / engineer',
-      statusColor: 'gray',
-      color: '#6366F1',
-      caption: 'per engineer',
+      id: 'team-due-week',
+      title: 'Due this week',
+      value: dueThisWeekCount,
+      progress: safePercent(dueThisWeekCount, Math.max(dueThisWeekCount, 10)),
+      statusLabel: 'Next 7 days',
+      statusColor: 'blue',
+      color: '#0EA5E9',
+      caption: 'due soon',
     },
     {
       id: 'team-waiting',
@@ -887,6 +896,9 @@ export function buildTeamMetrics({
       caption: 'waiting',
     },
   ];
+
+  // Rings are reserved for the hours card; the rest show a plain number.
+  return cards.map((c) => (c.id === 'team-hours-week' ? c : { ...c, ring: false }));
 }
 
 interface ReportMetricInputs {

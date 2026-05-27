@@ -2,42 +2,52 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
-import { buildDashboardMetrics, currentMockUser, mockIssues } from '../data/mockData';
 
 function LocationProbe() {
   const loc = useLocation();
   return <div data-testid="location">{loc.pathname}</div>;
 }
 
-describe('<Dashboard /> (functional + integration)', () => {
-  it('renders the overview heading and the work tabs', async () => {
+describe('<Dashboard /> (team-first)', () => {
+  it('renders the overview heading and the three tabs', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
     expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('Your Work')).toBeInTheDocument();
-    expect(screen.getByText("Your Team's Work")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByText(/Tasks assigned to you/i)).toBeInTheDocument(),
-    );
+    expect(screen.getByTestId('dashboard-tab-Team')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tab-Project Health')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tab-Resource Planning')).toBeInTheDocument();
   });
 
-  it('swaps to team metrics and the team panel on the Team\'s Work tab', async () => {
+  it('defaults to the Team tab: team metrics + the team panel', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByText("Your Team's Work"));
-    // Metric cards swap from personal to team-scoped.
+    // Team-scoped metric cards.
     expect(await screen.findByText('Team tasks')).toBeInTheDocument();
     expect(screen.getByText('Engineers')).toBeInTheDocument();
-    expect(screen.queryByText('Tasks assigned to you')).toBeNull();
-    // The team-members panel renders (and the My Tasks table does not).
+    // The engineer panel renders.
     expect(screen.getByTestId('team-work-panel')).toBeInTheDocument();
+    // Personal content is gone — it lives on Tasks/Hours now.
+    expect(screen.queryByText('Tasks assigned to you')).toBeNull();
     expect(screen.queryByText('Issues assigned to me')).toBeNull();
+    expect(screen.queryByText('Your Work')).toBeNull();
+  });
+
+  it('shows a ring only on the team-hours card; the rest are plain numbers', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    // Only "Team hours …" keeps a donut ring.
+    await waitFor(() => expect(screen.getAllByTestId('conic-ring').length).toBe(1));
+    // The other 7 team metric cards render a plain number.
+    expect(screen.getAllByTestId('metric-number').length).toBe(7);
   });
 
   it('shows project category cards on the Project Health tab', async () => {
@@ -46,7 +56,7 @@ describe('<Dashboard /> (functional + integration)', () => {
         <Dashboard />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByText('Project Health'));
+    fireEvent.click(screen.getByTestId('dashboard-tab-Project Health'));
     expect(await screen.findByTestId('category-card-stcs')).toBeInTheDocument();
   });
 
@@ -56,40 +66,11 @@ describe('<Dashboard /> (functional + integration)', () => {
         <Dashboard />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByText('Resource Planning'));
+    fireEvent.click(screen.getByTestId('dashboard-tab-Resource Planning'));
     expect(await screen.findByText('Team workload')).toBeInTheDocument();
   });
 
-  // Integration: the page should render exactly the 8 cards produced by
-  // buildDashboardMetrics — proves the data-driven refactor is wired up.
-  it('renders one card per metric returned by buildDashboardMetrics', async () => {
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getByText(/Tasks assigned to you/i)).toBeInTheDocument(),
-    );
-
-    // Use a sample input that resembles what the page will load to know the
-    // expected titles. We don't need the exact same data — only that the
-    // titles produced by the builder all appear in the DOM.
-    const expected = buildDashboardMetrics({
-      myIssues: mockIssues.filter((i) => i.assignee?.id === currentMockUser.id),
-      allIssues: mockIssues,
-      pastDueCount: 0,
-      weeklyHours: { logged: 0, target: 40 },
-      teamHours: { logged: 0, target: 360 },
-    });
-    expect(expected).toHaveLength(8);
-    for (const m of expected) {
-      expect(screen.getByText(m.title)).toBeInTheDocument();
-    }
-  });
-
-  // Integration: clicking a card with a route should navigate to that route.
-  it('navigates to the Past Due page when the Past due tasks card is clicked', async () => {
+  it('navigates to Past Due when the team past-due card is clicked', async () => {
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <Routes>
@@ -99,40 +80,11 @@ describe('<Dashboard /> (functional + integration)', () => {
       </MemoryRouter>,
     );
     const card = await waitFor(() =>
-      screen.getByRole('button', { name: /past due tasks/i }),
+      screen.getByRole('button', { name: /team past due/i }),
     );
     fireEvent.click(card);
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent('/past-due'),
     );
-  });
-
-  // Integration: every metric card on the dashboard uses the conic-gradient
-  // ring visual (and there are 8 of them).
-  it('renders a conic-gradient ring per metric card', async () => {
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getAllByTestId('conic-ring').length).toBeGreaterThan(0),
-    );
-    expect(screen.getAllByTestId('conic-ring')).toHaveLength(8);
-  });
-
-  // Integration: My Tasks table renders below the cards and includes a row
-  // for one of the seeded issues.
-  it('renders the My Tasks table with at least one seeded issue', async () => {
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    );
-    await waitFor(() =>
-      expect(screen.getByText(/Issues assigned to me/i)).toBeInTheDocument(),
-    );
-    // The seed data has #1024 assigned to the current mock user.
-    expect(await screen.findByText(/#1024/)).toBeInTheDocument();
   });
 });

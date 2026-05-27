@@ -32,6 +32,9 @@ _Last updated: 2026-05-27._
 | **CR #18 — Pre-live QA batch** | Responsive TopBar (0 horizontal overflow at 390/1280/1920); Hours roster from assignees; select-first hierarchical `UserGantt`; `TeamHours` Card/List views; sidebar Tasks→Past Due / Projects→Project Builder / +Reports; AllProjects HTML strip; TimeTracking de-mock; Hours auto-refresh; STCs `stc→stcs` alias; lint 0 warnings; category/loading polish. |
 | **CR #17 — Real Dashboard tabs** | The four Overview tabs render distinct content (was: `tab` set but never read). Persistent metric grid; *Project Health* = AIRCRAFT ENGINEERING tree (`DashboardProjectHealth`, shared `lib/projectHealth.ts`); *Resource Planning* = embedded team Gantt (`DashboardResourcePlanning`). |
 | **CR #19 — Team's Work redesign** | Team-scoped metric cards (`buildTeamMetrics`); per-engineer cards with projects (`TeamWorkPanel`); persisted engineer selector (`TeamMemberSelector`); iOS card→full-screen-detail morph (`TeamMemberCard`/`TeamMemberDetail`) via Framer Motion shared `layoutId`. Added `framer-motion`. |
+| **CR #22 — Team-first IA rebalance** | Dashboard rebuilt team-first (dropped "Your Work" tab; Team/Project Health/Resource Planning). Tasks & Hours are personal-first with a persisted "Show team" toggle that lazy-loads the team table / team schedule. |
+| **CR #23 — Engineer detail refinements** | Detail projects collapsed → expand to subtasks; card/detail show logged hours only (no "expected"); This week / Last week switcher drives week-scoped logged hours via `aggregateHours`. |
+| **CR #24 — Card rings + week-driven team hours** | Donut rings reserved for hours cards (count cards show plain numbers); the week toggle now also re-scopes the team-hours metric card (week summed from time entries). |
 
 ## Known live-data gotchas (carry forward)
 

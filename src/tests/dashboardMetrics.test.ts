@@ -132,14 +132,24 @@ describe('buildTeamMetrics', () => {
   const teamHours = { logged: 200, target: 360 };
 
   it('returns 8 cards with unique ids', () => {
-    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 4, teamHours });
+    const metrics = buildTeamMetrics({
+      allIssues: mockIssues,
+      pastDueCount: 4,
+      dueThisWeekCount: 3,
+      teamHours,
+    });
     expect(metrics).toHaveLength(8);
     const ids = metrics.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('total team tasks reflects allIssues length', () => {
-    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 0, teamHours });
+    const metrics = buildTeamMetrics({
+      allIssues: mockIssues,
+      pastDueCount: 0,
+      dueThisWeekCount: 0,
+      teamHours,
+    });
     expect(metrics.find((m) => m.id === 'team-tasks')?.value).toBe(mockIssues.length);
   });
 
@@ -147,14 +157,34 @@ describe('buildTeamMetrics', () => {
     const distinct = new Set(
       mockIssues.map((i) => i.assignee?.id).filter((id) => id !== undefined),
     ).size;
-    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 0, teamHours });
+    const metrics = buildTeamMetrics({
+      allIssues: mockIssues,
+      pastDueCount: 0,
+      dueThisWeekCount: 0,
+      teamHours,
+    });
     expect(metrics.find((m) => m.id === 'team-engineers')?.value).toBe(distinct);
   });
 
-  it('handles an empty issue list without dividing by zero', () => {
-    const metrics = buildTeamMetrics({ allIssues: empty, pastDueCount: 0, teamHours: zeroHours });
+  it('surfaces the due-this-week count', () => {
+    const metrics = buildTeamMetrics({
+      allIssues: mockIssues,
+      pastDueCount: 0,
+      dueThisWeekCount: 5,
+      teamHours,
+    });
+    expect(metrics.find((m) => m.id === 'team-due-week')?.value).toBe(5);
+    expect(metrics.find((m) => m.id === 'team-avg-load')).toBeUndefined();
+  });
+
+  it('handles an empty issue list without crashing', () => {
+    const metrics = buildTeamMetrics({
+      allIssues: empty,
+      pastDueCount: 0,
+      dueThisWeekCount: 0,
+      teamHours: zeroHours,
+    });
     expect(metrics).toHaveLength(8);
-    expect(metrics.find((m) => m.id === 'team-avg-load')?.value).toBe(0);
     metrics.forEach((m) => {
       expect(m.progress).toBeGreaterThanOrEqual(0);
       expect(m.progress).toBeLessThanOrEqual(100);

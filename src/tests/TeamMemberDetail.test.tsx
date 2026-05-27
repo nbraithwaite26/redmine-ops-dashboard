@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import TeamMemberDetail from '../components/TeamMemberDetail';
-import type { TeamUserRow } from '../lib/hoursAggregate';
+import type { UserHoursSummary } from '../lib/hoursAggregate';
 import type { Issue, User } from '../types/redmine';
 
 function user(id: number, name: string): User {
@@ -36,37 +36,51 @@ function issue(id: number, subject: string): Issue {
   };
 }
 
-const row: TeamUserRow = {
+const summary: UserHoursSummary = {
   user: user(7, 'Jose Garcia'),
+  totalHours: 6,
   projectCount: 1,
   taskCount: 2,
-  spentHours: 8,
-  estimatedHours: 16,
   projects: [
     {
       projectId: 1,
       projectName: 'STC Program',
-      spentHours: 8,
+      spentHours: 6,
       estimatedHours: 16,
       dueDate: '2026-06-01',
-      tasks: [issue(101, 'Draft compliance memo'), issue(102, 'Review drawings')],
+      tasks: [
+        { issue: issue(101, 'Draft compliance memo'), spentHours: 4 },
+        { issue: issue(102, 'Review drawings'), spentHours: 2 },
+      ],
     },
   ],
 };
 
 describe('<TeamMemberDetail />', () => {
-  it('renders the engineer hero, metrics, and project breakdown', () => {
-    render(<TeamMemberDetail row={row} onClose={() => {}} />);
+  it('renders the hero, logged hours, and projects collapsed by default', () => {
+    render(<TeamMemberDetail summary={summary} onClose={() => {}} />);
     const detail = screen.getByTestId('member-detail-7');
     expect(within(detail).getByText('Jose Garcia')).toBeInTheDocument();
     expect(within(detail).getByText('STC Program')).toBeInTheDocument();
-    expect(within(detail).getByText(/Draft compliance memo/)).toBeInTheDocument();
-    expect(within(detail).getByText(/1 projects/)).toBeInTheDocument();
+    // Logged hours, not "expected".
+    expect(within(detail).getByText(/6h logged/)).toBeInTheDocument();
+    expect(within(detail).queryByText(/expected/)).toBeNull();
+    // Subtasks are hidden until the project is expanded.
+    expect(within(detail).queryByText(/Draft compliance memo/)).toBeNull();
+    expect(screen.queryByTestId('member-project-tasks-1')).toBeNull();
+  });
+
+  it('expands a project to reveal its subtasks', () => {
+    render(<TeamMemberDetail summary={summary} onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('member-project-toggle-1'));
+    const tasks = screen.getByTestId('member-project-tasks-1');
+    expect(within(tasks).getByText(/Draft compliance memo/)).toBeInTheDocument();
+    expect(within(tasks).getByText(/Review drawings/)).toBeInTheDocument();
   });
 
   it('calls onClose from the close button, the backdrop, and Escape', () => {
     const onClose = vi.fn();
-    render(<TeamMemberDetail row={row} onClose={onClose} />);
+    render(<TeamMemberDetail summary={summary} onClose={onClose} />);
 
     fireEvent.click(screen.getByTestId('member-detail-close-7'));
     expect(onClose).toHaveBeenCalledTimes(1);

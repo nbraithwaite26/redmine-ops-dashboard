@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Users } from 'lucide-react';
 import CreateIssueModal from '../components/CreateIssueModal';
 import GroupedTaskTable from '../components/GroupedTaskTable';
 import IssueTable from '../components/IssueTable';
@@ -16,6 +16,8 @@ import {
 } from '../services/redmineApi';
 import type { Issue, TimeEntry, User } from '../types/redmine';
 
+const TEAM_PREF_KEY = 'rod.tasks.showTeam';
+
 export default function Tasks() {
   const { user: currentUser, loading: userLoading } = useCurrentUser();
   const [myIssues, setMyIssues] = useState<Issue[]>([]);
@@ -27,23 +29,46 @@ export default function Tasks() {
   const [createOpen, setCreateOpen] = useState(false);
   const { readOnly } = useReadOnly();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Track whether we've already honored the ?id= deep-link for this page
-  // visit. Without this, manually closing the drawer would immediately
-  // reopen it because the URL still carries the id.
   const handledDeepLink = useRef(false);
 
+  // Team view is opt-in (this page is personal-first). Persist the choice.
+  const [showTeam, setShowTeam] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TEAM_PREF_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [teamLoaded, setTeamLoaded] = useState(false);
+  const [teamLoading, setTeamLoading] = useState(false);
+
+  const toggleTeam = () =>
+    setShowTeam((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(TEAM_PREF_KEY, next ? '1' : '0');
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+
+  // Default load: just the current user's issues — keep the personal page light.
   const load = useCallback(async () => {
-    const uid = currentUser?.id;
-    const [m, all, u, te] = await Promise.all([
-      getMyIssues(uid),
-      getIssues(),
-      getUsers(),
-      getTimeEntries(),
-    ]);
+    const m = await getMyIssues(currentUser?.id);
     setMyIssues(m);
+  }, [currentUser?.id]);
+
+  // Team data is fetched lazily, only the first time the team view is shown.
+  const loadTeam = useCallback(async () => {
+    setTeamLoading(true);
+    const uid = currentUser?.id;
+    const [all, u, te] = await Promise.all([getIssues(), getUsers(), getTimeEntries()]);
     setTeamIssues(uid === undefined ? all : all.filter((i) => i.assignee?.id !== uid));
     setUsers(u);
     setTimeEntries(te);
+    setTeamLoaded(true);
+    setTeamLoading(false);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -51,9 +76,12 @@ export default function Tasks() {
     void load();
   }, [userLoading, load]);
 
-  // Honor ?id= once per visit: after the lists load, open that issue's
-  // drawer. Clears the param so subsequent navigation away + back doesn't
-  // re-trigger.
+  useEffect(() => {
+    if (userLoading) return;
+    if (showTeam && !teamLoaded && !teamLoading) void loadTeam();
+  }, [userLoading, showTeam, teamLoaded, teamLoading, loadTeam]);
+
+  // Honor ?id= once per visit: after the lists load, open that issue's drawer.
   useEffect(() => {
     if (handledDeepLink.current) return;
     const raw = searchParams.get('id');
@@ -75,7 +103,7 @@ export default function Tasks() {
         <div>
           <h1 className="text-2xl font-semibold">Tasks</h1>
           <p className="text-sm text-ink-muted">
-            Your work plus a per-user view of the rest of the team.
+            Your assigned work. Expand the team view when you need the bigger picture.
           </p>
         </div>
         <button
@@ -100,17 +128,37 @@ export default function Tasks() {
         />
       </section>
 
-      <section className="card overflow-hidden">
-        <GroupedTaskTable
-          title="Team tasks (this week)"
-          users={currentUser ? users.filter((u) => u.id !== currentUser.id) : users}
-          issues={teamIssues}
-          timeEntries={
-            currentUser
-              ? timeEntries.filter((t) => t.user.id !== currentUser.id)
-              : timeEntries
-          }
-        />
+      <section>
+        <button
+          type="button"
+          onClick={toggleTeam}
+          className="flex items-center gap-2 text-sm font-medium text-ink-muted hover:text-ink"
+          aria-expanded={showTeam}
+          data-testid="tasks-team-toggle"
+        >
+          {showTeam ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Users size={14} />
+          {showTeam ? 'Hide team tasks' : 'Show team tasks'}
+        </button>
+
+        {showTeam && (
+          <div className="card overflow-hidden mt-3" data-testid="tasks-team-section">
+            {teamLoading && !teamLoaded ? (
+              <div className="p-6 text-sm text-ink-muted">Loading team tasks…</div>
+            ) : (
+              <GroupedTaskTable
+                title="Team tasks (this week)"
+                users={currentUser ? users.filter((u) => u.id !== currentUser.id) : users}
+                issues={teamIssues}
+                timeEntries={
+                  currentUser
+                    ? timeEntries.filter((t) => t.user.id !== currentUser.id)
+                    : timeEntries
+                }
+              />
+            )}
+          </div>
+        )}
       </section>
 
       {quickIssue && (
@@ -118,8 +166,6 @@ export default function Tasks() {
           issue={quickIssue}
           onClose={() => setQuickIssue(null)}
           onSaved={(updated) => {
-            // The update may flip assignment between my/team lists.
-            // Replace where it lives + move if the assignee changed.
             const nowMine = updated.assignee?.id === currentUser?.id;
             if (nowMine) {
               setMyIssues((prev) =>
@@ -183,14 +229,12 @@ export default function Tasks() {
           onClose={() => setCreateOpen(false)}
           onCreated={(issue) => {
             setCreateOpen(false);
-            // Place the new issue in the correct list based on assignment.
             const goesToMyList = issue.assignee?.id === currentUser?.id;
             if (goesToMyList) {
               setMyIssues((prev) => [issue, ...prev]);
             } else {
               setTeamIssues((prev) => [issue, ...prev]);
             }
-            // Auto-open the drawer so the user can flesh out the new issue.
             setOpenIssue(issue);
           }}
         />

@@ -14,6 +14,110 @@ Status legend:
 
 ---
 
+## #25 — Engineers-out time-off calendar
+
+**Status:** 📝 Plan drafted, awaiting approval (not yet coded)
+
+**Request:** Make the Dashboard "Engineers" card show how many engineers will
+be out that week. Clicking it springs up (same morph as the team cards) into a
+time-off calendar for the week, with a selector to move to the next week, and
+colors coded by the type of time off (per the Redmine screenshot: Vacation,
+Personal Time, Holiday, Customer Visit (FOF/FOT)).
+
+**Decisions captured:**
+- **Data source:** time entries whose *activity* is a leave type. Derive
+  `{ user, date, type, hours }` by filtering `getTimeEntries({from,to})` to a
+  leave-activity set. (Mock mode seeds a few leave entries for testing.)
+- **"Out" count includes customer visits** (not only true leave). The card
+  headline becomes "N out this week" (distinct engineers with any leave /
+  customer-visit entry that week); "12 on the team" stays as a sub-caption.
+- **Calendar has a week ⇄ month toggle, default week.** Week = engineers ×
+  Mon–Sun color-coded blocks; month = full grid like the screenshot. Prev/next
+  navigation + a color legend per type.
+
+**Implementation sketch:**
+- `getTimeOff(range)` service (filters time entries to leave activities).
+- Engineers metric card becomes an interactive Framer Motion element
+  (`layoutId`) → `TimeOffDetail` full-screen sheet (reuses the
+  `TeamMemberDetail` morph + dismiss + reduced-motion scaffolding).
+- Week/month calendar component, color map per leave type, lazy fetch per
+  period, tests + browser verification.
+
+**Open input needed before coding:** the exact Redmine activity strings that
+represent leave (as returned by `getTimeActivities()` — e.g. is it literally
+`"Personal Time"`, `"Holiday Mexico"`, `"Customer Visit (FOF/FOT)"`).
+
+---
+
+## #24 — Dashboard card rings + week-driven team hours
+
+**Status:** ✅ Shipped (2026-05-27)
+
+**Request:** Remove the donut rings from the metric cards except the team-hours
+and my-hours cards. Also make the Dashboard's Last week button update the
+team-hours card (not just the engineer cards).
+
+**Shipped:**
+- `DashboardCard` `ring` opt-out; `buildTeamMetrics` + `buildDashboardMetrics`
+  set `ring: false` on count cards (rings kept on `hours-week` /
+  `team-hours-week`).
+- Week selection lifted to `Dashboard`; team hours are summed from time
+  entries for the selected week and the card title reflects it. `TeamWorkPanel`
+  accepts the week as a controlled prop.
+
+---
+
+## #23 — Engineer detail: collapse projects, logged hours, week switcher
+
+**Status:** ✅ Shipped (2026-05-27)
+
+**Request:** On the Team page, clicking an engineer should show their projects
+collapsed with a toggle to reveal subtasks. Remove "hours expected" from the
+team card — show only hours logged — and let the page switch between the
+current and previous week.
+
+**Shipped:**
+- `TeamMemberDetail` projects are collapsed by default (`ProjectBlock` toggle)
+  and expand to show subtasks with per-task logged hours.
+- `TeamMemberCard` / `TeamMemberDetail` show only logged hours (dropped the
+  estimated/"expected" figure).
+- `TeamWorkPanel` gained a This week / Last week switcher and now computes
+  week-scoped *logged* hours via `aggregateHours` (time-entry based),
+  re-fetching time entries when the week changes.
+- Replaced the "Avg load" team metric card with "Due this week" (open issues
+  due within the next 7 days).
+
+**Decisions:** "hours logged" = time entries in the selected week (not
+cumulative issue spent-hours); the week switcher lives on the Team members
+panel header and is ephemeral (defaults to the current week).
+
+---
+
+## #22 — Team-first Dashboard; personal-first Tasks & Hours
+
+**Status:** ✅ Shipped (2026-05-27)
+
+**Request:** Make the Dashboard more team-focused, while Tasks and Hours
+center on the individual — with the ability to see the team's work when
+needed.
+
+**Shipped:**
+- Dashboard rebuilt team-first: dropped the "Your Work" tab; tabs are Team
+  (default, = team metrics + `TeamWorkPanel`) / Project Health / Resource
+  Planning. Removed personal metrics + My Tasks table from the page.
+- Tasks personal-first: My tasks by default; team `GroupedTaskTable` behind a
+  persisted "Show team tasks" toggle, lazy-loaded on first reveal.
+- Hours personal-first: this/last-week sections by default; team schedule
+  behind a persisted "Show team schedule" toggle, gantt lazy-loaded on first
+  reveal.
+
+**Decisions:** team-first Dashboard *replaces* the personal landing (personal
+work now owned by Tasks/Hours); "see team" is an inline per-page toggle (not a
+link-out). Toggles persist per device (`rod.tasks.showTeam` /
+`rod.hours.showTeam`).
+
+---
+
 ## #1 — Collapsible left sidebar
 
 **Status:** ✅ Shipped

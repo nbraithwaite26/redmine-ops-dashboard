@@ -1,78 +1,89 @@
-import { useEffect, useState } from 'react';
-import { ChevronDown, Download, Edit3, MoreVertical, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardCard from '../components/DashboardCard';
 import DashboardProjectHealth from '../components/DashboardProjectHealth';
 import DashboardResourcePlanning from '../components/DashboardResourcePlanning';
-import IssueTable from '../components/IssueTable';
-import QuickEditPopup from '../components/QuickEditPopup';
-import TicketDrawer from '../components/TicketDrawer';
+import TeamWorkPanel, { type WeekOffset } from '../components/TeamWorkPanel';
 import type { Issue } from '../types/redmine';
-import {
-  getIssues,
-  getMyIssues,
-  getPastDueIssues,
-  getTeamHours,
-  getWeeklyHours,
-} from '../services/redmineApi';
-import { buildDashboardMetrics, buildTeamMetrics } from '../data/mockData';
-import TeamWorkPanel from '../components/TeamWorkPanel';
-import { useCurrentUser } from '../hooks/useCurrentUser';
+import { getIssues, getPastDueIssues, getTimeEntries } from '../services/redmineApi';
+import { buildTeamMetrics } from '../data/mockData';
+import { weekRange } from '../lib/hoursAggregate';
+import { today } from '../lib/format';
 
-const TABS = ['Your Work', "Your Team's Work", 'Project Health', 'Resource Planning'];
+// Team-first Overview. Personal work (my tasks / my hours) now lives on the
+// Tasks and Hours pages, so the Dashboard leads with the team: team metrics +
+// the engineer cards. Project Health and Resource Planning remain as
+// secondary tabs.
+const TABS = ['Team', 'Project Health', 'Resource Planning'] as const;
+type Tab = (typeof TABS)[number];
+
+const TEAM_HOURS_TARGET = 360;
 
 export default function Dashboard() {
-  const [tab, setTab] = useState(TABS[0]);
-  const { user: currentUser, loading: userLoading } = useCurrentUser();
-  const [myIssues, setMyIssues] = useState<Issue[]>([]);
+  const [tab, setTab] = useState<Tab>('Team');
+  // Week selection is shared: it drives both the team-hours metric card and
+  // the engineer cards in TeamWorkPanel.
+  const [week, setWeek] = useState<WeekOffset>(0);
+  const range = useMemo(() => weekRange(week), [week]);
+
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
-  const [weekly, setWeekly] = useState({ logged: 0, target: 40 });
-  const [team, setTeam] = useState({ logged: 0, target: 360 });
-  const [openIssue, setOpenIssue] = useState<Issue | null>(null);
-  const [quickIssue, setQuickIssue] = useState<Issue | null>(null);
+  const [teamLogged, setTeamLogged] = useState(0);
 
-  const load = async (uid: number | undefined) => {
-    const [m, a, pd, w, t] = await Promise.all([
-      getMyIssues(uid),
-      getIssues(),
-      getPastDueIssues(),
-      getWeeklyHours(uid),
-      getTeamHours(),
-    ]);
-    setMyIssues(m);
-    setAllIssues(a);
-    setPastDue(pd);
-    setWeekly(w);
-    setTeam(t);
-  };
-
+  // Issue counts are not week-scoped — load once.
   useEffect(() => {
-    if (userLoading) return;
-    void load(currentUser?.id);
-  }, [userLoading, currentUser?.id]);
+    let cancelled = false;
+    (async () => {
+      const [a, pd] = await Promise.all([getIssues(), getPastDueIssues()]);
+      if (cancelled) return;
+      setAllIssues(a);
+      setPastDue(pd);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const isTeamTab = tab === "Your Team's Work";
-  const metrics = isTeamTab
-    ? buildTeamMetrics({ allIssues, pastDueCount: pastDue.length, teamHours: team })
-    : buildDashboardMetrics({
-        myIssues,
-        allIssues,
-        pastDueCount: pastDue.length,
-        weeklyHours: weekly,
-        teamHours: team,
-      });
+  // Team hours logged in the selected week = sum of all time entries in range.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entries = await getTimeEntries({ from: range.from, to: range.to });
+      if (cancelled) return;
+      const total = entries.reduce((sum, e) => sum + e.hours, 0);
+      setTeamLogged(Math.round(total * 10) / 10);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [range.from, range.to]);
+
+  // Open issues due within the next 7 days (today inclusive).
+  const dueThisWeekCount = useMemo(() => {
+    const start = today();
+    const startIso = start.toISOString().slice(0, 10);
+    const endDate = new Date(start);
+    endDate.setDate(start.getDate() + 7);
+    const endIso = endDate.toISOString().slice(0, 10);
+    return allIssues.filter(
+      (i) => !i.closedOn && i.dueDate && i.dueDate >= startIso && i.dueDate <= endIso,
+    ).length;
+  }, [allIssues]);
+
+  const teamMetrics = buildTeamMetrics({
+    allIssues,
+    pastDueCount: pastDue.length,
+    dueThisWeekCount,
+    teamHours: { logged: teamLogged, target: TEAM_HOURS_TARGET },
+    teamHoursWeekLabel: week === 0 ? 'this week' : 'last week',
+  });
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
+      <div>
         <h1 className="text-2xl font-semibold">Overview</h1>
-        <button className="inline-flex items-center gap-1 text-ink-muted hover:text-ink">
-          <ChevronDown size={18} />
-        </button>
-        <div className="flex-1" />
-        <button className="btn-secondary"><RefreshCw size={14} /></button>
-        <button className="btn-secondary"><Edit3 size={14} /></button>
-        <button className="btn-secondary"><MoreVertical size={14} /></button>
+        <p className="text-sm text-ink-muted">
+          Your team at a glance. Your own tasks and hours live under Tasks and Hours.
+        </p>
       </div>
 
       <div className="flex items-center gap-4 border-b border-gray-200">
@@ -80,6 +91,7 @@ export default function Dashboard() {
           <button
             key={t}
             onClick={() => setTab(t)}
+            data-testid={`dashboard-tab-${t}`}
             className={
               'px-1 py-2 text-sm font-medium ' +
               (tab === t
@@ -92,77 +104,20 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {metrics.map((metric) => (
-          <DashboardCard key={metric.id} metric={metric} />
-        ))}
-      </div>
-
-      {tab === 'Your Work' && (
-        <div className="space-y-3">
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">My Tasks</h2>
-              <div className="text-xs text-ink-muted">
-                Last refreshed just now
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="btn-secondary"><Edit3 size={14} /> Edit</button>
-              <button className="btn-secondary"><Download size={14} /> Export</button>
-            </div>
+      {tab === 'Team' && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {teamMetrics.map((metric) => (
+              <DashboardCard key={metric.id} metric={metric} />
+            ))}
           </div>
-          <IssueTable
-            title="Issues assigned to me"
-            issues={myIssues}
-            onOpenIssue={setOpenIssue}
-            onQuickEdit={setQuickIssue}
-            onRefresh={() => void load(currentUser?.id)}
-          />
-        </div>
+          <TeamWorkPanel week={week} onWeekChange={setWeek} />
+        </>
       )}
-
-      {isTeamTab && <TeamWorkPanel />}
 
       {tab === 'Project Health' && <DashboardProjectHealth />}
 
       {tab === 'Resource Planning' && <DashboardResourcePlanning />}
-
-      {quickIssue && (
-        <QuickEditPopup
-          issue={quickIssue}
-          onClose={() => setQuickIssue(null)}
-          onSaved={(updated) => {
-            setMyIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-            setAllIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-          }}
-          onOpenFullEditor={(i) => {
-            setQuickIssue(null);
-            setOpenIssue(i);
-          }}
-        />
-      )}
-      {openIssue && (
-        <TicketDrawer
-          issue={openIssue}
-          onClose={() => setOpenIssue(null)}
-          onSaved={(updated) => {
-            setOpenIssue(null);
-            setMyIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-            setAllIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-          }}
-          onDeleted={(id) => {
-            setOpenIssue(null);
-            setMyIssues((prev) => prev.filter((i) => i.id !== id));
-            setAllIssues((prev) => prev.filter((i) => i.id !== id));
-            setPastDue((prev) => prev.filter((i) => i.id !== id));
-          }}
-          onQuickEdit={(i) => {
-            setOpenIssue(null);
-            setQuickIssue(i);
-          }}
-        />
-      )}
     </div>
   );
 }
