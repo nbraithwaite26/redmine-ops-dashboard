@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — CR #27: clickable project cards → spring-up task list (2026-05-27)
+
+- Project cards on **All Projects** and the **category drill-down** are now
+  clickable `ProjectCard`s that morph (shared `layoutId`) into a full-screen
+  `ProjectDetail` showing the project's **related tasks** — same spring
+  interaction as the team/time-off cards (close / Escape / backdrop / swipe,
+  reduced-motion fallback).
+- New `getIssuesByProject(projectId)` facade method (`/issues?project_id=…`)
+  so the detail loads the project's full task set, not the page's capped list.
+
 ### Added — CR #25: engineers-out time-off calendar (UI) (2026-05-27)
 
 - **Engineers-out card** — the Engineers metric becomes `EngineersOutCard`

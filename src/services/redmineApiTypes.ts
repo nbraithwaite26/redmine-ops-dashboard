@@ -37,6 +37,7 @@ export interface RedmineApi {
 
   // ─── Issues ───────────────────────────────────────────────────────────
   getIssues(): Promise<Issue[]>;
+  getIssuesByProject(projectId: number): Promise<Issue[]>;
   getMyIssues(userId?: number): Promise<Issue[]>;
   getPastDueIssues(today?: Date): Promise<Issue[]>;
   getIssueById(id: number): Promise<Issue | null>;

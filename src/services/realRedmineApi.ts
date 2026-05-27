@@ -385,6 +385,14 @@ export const realRedmineApi: RedmineApi = {
     return res.items;
   },
 
+  async getIssuesByProject(projectId: number): Promise<Issue[]> {
+    const res = await cachedGet<PaginatedWire<Issue>>('/issues', {
+      project_id: projectId,
+      limit: 100,
+    });
+    return res.items;
+  },
+
   async getMyIssues(userId?: number): Promise<Issue[]> {
     const assignedTo = userId === undefined ? 'me' : String(userId);
     const res = await cachedGet<PaginatedWire<Issue>>('/issues', {

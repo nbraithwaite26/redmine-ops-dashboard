@@ -14,6 +14,24 @@ Status legend:
 
 ---
 
+## #27 — Clickable project cards → spring-up task list
+
+**Status:** ✅ Shipped (2026-05-27)
+
+**Request:** In the Projects tabs, clicking a project should show its related
+tasks in a spring animation (same as the team cards).
+
+**Shipped:**
+- `ProjectCard` (clickable, Framer Motion `layoutId`) replaces the static
+  project-card markup on **AllProjects** and **ProjectCategory**.
+- `ProjectDetail` full-screen morph lists the project's related tasks
+  (#id, subject, status, assignee, due), with close / Escape / backdrop /
+  swipe dismiss + reduced-motion.
+- New `getIssuesByProject(projectId)` service (`/issues?project_id=…`) so the
+  detail loads the project's full task set.
+
+---
+
 ## #25 — Engineers-out time-off calendar
 
 **Status:** ✅ UI shipped (2026-05-27) — real-mode data source still pending

@@ -341,6 +341,10 @@ export const mockRedmineApi: RedmineApi = {
     return wait({ users: mockUsers, issues, allocations: mockAllocations });
   },
 
+  async getIssuesByProject(projectId: number) {
+    return wait(issues.filter((i) => i.projectId === projectId));
+  },
+
   async getTimeOff(range: { from: string; to: string }) {
     const all = buildMockTimeOff();
     return wait(all.filter((e) => e.date >= range.from && e.date <= range.to));

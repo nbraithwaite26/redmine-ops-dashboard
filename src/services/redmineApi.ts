@@ -40,6 +40,7 @@ export const createProject = api.createProject.bind(api);
 export const updateProject = api.updateProject.bind(api);
 
 export const getIssues = api.getIssues.bind(api);
+export const getIssuesByProject = api.getIssuesByProject.bind(api);
 export const getMyIssues = api.getMyIssues.bind(api);
 export const getPastDueIssues = api.getPastDueIssues.bind(api);
 export const getIssueById = api.getIssueById.bind(api);
