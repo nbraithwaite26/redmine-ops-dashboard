@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDashboardMetrics,
   buildReportMetrics,
+  buildTeamMetrics,
   buildTimeMetrics,
   mockIssues,
   mockUsers,
@@ -124,6 +125,40 @@ describe('buildDashboardMetrics', () => {
     });
     const ids = metrics.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('buildTeamMetrics', () => {
+  const teamHours = { logged: 200, target: 360 };
+
+  it('returns 8 cards with unique ids', () => {
+    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 4, teamHours });
+    expect(metrics).toHaveLength(8);
+    const ids = metrics.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('total team tasks reflects allIssues length', () => {
+    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 0, teamHours });
+    expect(metrics.find((m) => m.id === 'team-tasks')?.value).toBe(mockIssues.length);
+  });
+
+  it('counts distinct assignees as engineers', () => {
+    const distinct = new Set(
+      mockIssues.map((i) => i.assignee?.id).filter((id) => id !== undefined),
+    ).size;
+    const metrics = buildTeamMetrics({ allIssues: mockIssues, pastDueCount: 0, teamHours });
+    expect(metrics.find((m) => m.id === 'team-engineers')?.value).toBe(distinct);
+  });
+
+  it('handles an empty issue list without dividing by zero', () => {
+    const metrics = buildTeamMetrics({ allIssues: empty, pastDueCount: 0, teamHours: zeroHours });
+    expect(metrics).toHaveLength(8);
+    expect(metrics.find((m) => m.id === 'team-avg-load')?.value).toBe(0);
+    metrics.forEach((m) => {
+      expect(m.progress).toBeGreaterThanOrEqual(0);
+      expect(m.progress).toBeLessThanOrEqual(100);
+    });
   });
 });
 

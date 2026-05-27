@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — CR #19: Team's Work redesign + card-expand interaction (2026-05-27)
+
+The Dashboard "Your Team's Work" tab becomes a team-centric view. Added
+`framer-motion` for the shared-layout card morph.
+
+- **Team metrics** — `buildTeamMetrics` (team tasks, in-progress, team
+  past-due, unassigned, team hours, engineer count, avg load, awaiting). The
+  Dashboard metric grid swaps to these on the Team's Work tab; other tabs keep
+  the personal grid.
+- **Per-engineer cards** — `TeamWorkPanel` renders a card per engineer with
+  their per-project / per-task workload, derived from assignees via
+  `getTeamSchedule` (scoped to AIRCRAFT ENGINEERING) so it works without the
+  admin-only `/users` endpoint.
+- **Engineer selector** — `TeamMemberSelector` popover multi-select (persisted
+  to `localStorage`). Default set matched by first name or email local-part
+  (`lib/teamSelection.ts`): afreixas, nbraithwaite, jgarcia, kgonzalez,
+  rdelgado, vcoy; falls back to all when nothing matches.
+- **Card → full-screen detail** — `TeamMemberCard` morphs into
+  `TeamMemberDetail` via Framer Motion `layoutId` (border-radius, gradient/
+  initials hero, name all interpolate). Staggered body reveal, spring easing,
+  tap-scale, fade-in close, backdrop dim + scroll-lock, dismiss via close /
+  Escape / backdrop / swipe-down handle, safe-area padding, and a
+  `useReducedMotion` fade fallback.
+
+### Added — CR #17: real Dashboard tabs (2026-05-27)
+
+The four Dashboard tabs now render distinct content (previously the tab state
+was set but never read). Metric grid stays persistent; the section below swaps:
+
+- **Your Work** — unchanged (my metrics + My Tasks).
+- **Your Team's Work** — see CR #19.
+- **Project Health** — `DashboardProjectHealth`: portfolio health on the
+  AIRCRAFT ENGINEERING tree (metrics + drill-down category cards). Shared
+  `lib/projectHealth.ts` (`buildSourceMetrics`) extracted from the Projects
+  page.
+- **Resource Planning** — `DashboardResourcePlanning`: embedded team Gantt via
+  `getTeamSchedule`, plus a link to `/resources`.
+
 ### Fixed / Changed — CR #18: pre-live QA batch (2026-05-26)
 
 A 12-commit pass against pre-live QA findings. See

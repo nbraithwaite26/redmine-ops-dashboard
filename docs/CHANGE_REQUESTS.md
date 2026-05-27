@@ -747,7 +747,53 @@ piece is reviewable and the foundational data fix lands first.
 
 ## #17 — Make the Dashboard tabs render real, distinct content
 
-**Status:** 📥 Collected (planned after CR #16)
+**Status:** ✅ Shipped (2026-05-27)
+
+**Shipped:** The four tabs read `tab` and render distinct content below a
+persistent metric grid. *Your Work* unchanged; *Your Team's Work* → CR #19;
+*Project Health* → `DashboardProjectHealth` (AIRCRAFT ENGINEERING tree metrics
++ category cards; shared `lib/projectHealth.ts`); *Resource Planning* →
+`DashboardResourcePlanning` (embedded team Gantt via `getTeamSchedule` + link
+to `/resources`). Decisions: persistent metric row, Project Health scoped to
+the default tree, Gantt embedded.
+
+---
+
+## #19 — Team's Work: team metrics, per-engineer cards, selector + card-expand
+
+**Status:** ✅ Shipped (2026-05-27)
+
+**Request:** On the Dashboard "Your Team's Work" tab, (1) make the metric
+cards reflect the team rather than the current user; (2) add per-engineer
+cards showing each engineer's projects; (3) add a selector to choose which
+engineers appear; (4) implement an iOS-style "card expands into full-screen
+detail" interaction (Dribbble shot 25725700) with spatial continuity,
+border-radius morph, staggered reveal, spring motion, swipe-to-dismiss, and a
+reduced-motion fallback.
+
+**Shipped:**
+- `buildTeamMetrics` (team-scoped cards); Dashboard swaps the grid on the
+  team tab.
+- `TeamWorkPanel` + `TeamMemberCard` / `TeamMemberDetail` (Framer Motion
+  shared `layoutId` morph) + `TeamMemberSelector` (persisted multi-select).
+- Engineers + workload derived from assignees via `getTeamSchedule`
+  (AIRCRAFT ENGINEERING tree). Default selection in `lib/teamSelection.ts`
+  (afreixas, nbraithwaite, jgarcia, kgonzalez, rdelgado, vcoy), matched by
+  first name or email local-part, all-fallback.
+- Added `framer-motion` dependency.
+
+**Decisions:** Framer Motion (vs hand-rolled FLIP / View Transitions);
+initials-on-gradient hero (Redmine users have no photos); the plain
+all-issues table added on this tab in CR #17 was replaced by the engineer
+cards.
+
+---
+
+### (historical context for #17)
+
+Original collected request below.
+
+**Status (original):** 📥 Collected (planned after CR #16)
 
 **Origin:** Surfaced during CR #16 investigation. `src/pages/Dashboard.tsx`
 declares four tabs — `Your Work`, `Your Team's Work`, `Project Health`,

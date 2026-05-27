@@ -24,14 +24,40 @@ describe('<Dashboard /> (functional + integration)', () => {
     );
   });
 
-  it('switches dashboard tabs', () => {
+  it('swaps to team metrics and the team panel on the Team\'s Work tab', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText("Your Team's Work"));
+    // Metric cards swap from personal to team-scoped.
+    expect(await screen.findByText('Team tasks')).toBeInTheDocument();
+    expect(screen.getByText('Engineers')).toBeInTheDocument();
+    expect(screen.queryByText('Tasks assigned to you')).toBeNull();
+    // The team-members panel renders (and the My Tasks table does not).
+    expect(screen.getByTestId('team-work-panel')).toBeInTheDocument();
+    expect(screen.queryByText('Issues assigned to me')).toBeNull();
+  });
+
+  it('shows project category cards on the Project Health tab', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByText('Project Health'));
-    expect(screen.getByText('Project Health')).toBeInTheDocument();
+    expect(await screen.findByTestId('category-card-stcs')).toBeInTheDocument();
+  });
+
+  it('embeds the team Gantt on the Resource Planning tab', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText('Resource Planning'));
+    expect(await screen.findByText('Team workload')).toBeInTheDocument();
   });
 
   // Integration: the page should render exactly the 8 cards produced by

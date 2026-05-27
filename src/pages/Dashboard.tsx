@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Download, Edit3, MoreVertical, RefreshCw } from 'lucide-react';
 import DashboardCard from '../components/DashboardCard';
+import DashboardProjectHealth from '../components/DashboardProjectHealth';
+import DashboardResourcePlanning from '../components/DashboardResourcePlanning';
 import IssueTable from '../components/IssueTable';
 import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
@@ -12,7 +14,8 @@ import {
   getTeamHours,
   getWeeklyHours,
 } from '../services/redmineApi';
-import { buildDashboardMetrics } from '../data/mockData';
+import { buildDashboardMetrics, buildTeamMetrics } from '../data/mockData';
+import TeamWorkPanel from '../components/TeamWorkPanel';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
 const TABS = ['Your Work', "Your Team's Work", 'Project Health', 'Resource Planning'];
@@ -48,13 +51,16 @@ export default function Dashboard() {
     void load(currentUser?.id);
   }, [userLoading, currentUser?.id]);
 
-  const metrics = buildDashboardMetrics({
-    myIssues,
-    allIssues,
-    pastDueCount: pastDue.length,
-    weeklyHours: weekly,
-    teamHours: team,
-  });
+  const isTeamTab = tab === "Your Team's Work";
+  const metrics = isTeamTab
+    ? buildTeamMetrics({ allIssues, pastDueCount: pastDue.length, teamHours: team })
+    : buildDashboardMetrics({
+        myIssues,
+        allIssues,
+        pastDueCount: pastDue.length,
+        weeklyHours: weekly,
+        teamHours: team,
+      });
 
   return (
     <div className="space-y-5">
@@ -92,27 +98,35 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">My Tasks</h2>
-            <div className="text-xs text-ink-muted">
-              Last refreshed just now
+      {tab === 'Your Work' && (
+        <div className="space-y-3">
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">My Tasks</h2>
+              <div className="text-xs text-ink-muted">
+                Last refreshed just now
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn-secondary"><Edit3 size={14} /> Edit</button>
+              <button className="btn-secondary"><Download size={14} /> Export</button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary"><Edit3 size={14} /> Edit</button>
-            <button className="btn-secondary"><Download size={14} /> Export</button>
-          </div>
+          <IssueTable
+            title="Issues assigned to me"
+            issues={myIssues}
+            onOpenIssue={setOpenIssue}
+            onQuickEdit={setQuickIssue}
+            onRefresh={() => void load(currentUser?.id)}
+          />
         </div>
-        <IssueTable
-          title="Issues assigned to me"
-          issues={myIssues}
-          onOpenIssue={setOpenIssue}
-          onQuickEdit={setQuickIssue}
-          onRefresh={() => void load(currentUser?.id)}
-        />
-      </div>
+      )}
+
+      {isTeamTab && <TeamWorkPanel />}
+
+      {tab === 'Project Health' && <DashboardProjectHealth />}
+
+      {tab === 'Resource Planning' && <DashboardResourcePlanning />}
 
       {quickIssue && (
         <QuickEditPopup
