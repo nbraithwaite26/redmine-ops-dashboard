@@ -6,6 +6,7 @@ dist-ssr
 .env.*
 !.env.example
 !.env.test
+!.env.production
 .vscode/*
 !.vscode/extensions.json
 .idea

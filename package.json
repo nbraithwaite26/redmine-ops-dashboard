@@ -10,13 +10,17 @@
     "dev": "vite",
     "dev:server": "npm --workspace server run dev",
     "dev:all": "concurrently -k -n web,api -c yellow,cyan \"npm run dev\" \"npm run dev:server\"",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm --workspace server run build",
+    "start": "node server/dist/index.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:server": "npm --workspace server run test",
     "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "clsx": "^2.1.1",

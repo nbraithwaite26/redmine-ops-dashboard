@@ -2,9 +2,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Set `base` to the repo name for GitHub Pages hosting under /<repo>/
-// Override with VITE_BASE env var when deploying elsewhere.
-const base = (globalThis as any).process?.env?.VITE_BASE ?? '/redmine-ops-dashboard/';
+// Azure App Service serves the app at the site root. Base defaults to '/';
+// override with VITE_BASE for sub-path hosting (e.g. GitHub Pages).
+const base = (globalThis as any).process?.env?.VITE_BASE ?? '/';
 
 export default defineConfig({
   plugins: [react()],

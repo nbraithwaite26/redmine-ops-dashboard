@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -82,6 +83,14 @@ admin.route('/users', adminUsersRoute);
 admin.route('/permissions', adminPermissionsRoute);
 admin.route('/history', adminHistoryRoute);
 app.route('/api/admin', admin);
+
+// ── Static frontend (single-process Azure App Service deploy) ──────────
+// Serve the Vite build from ./dist. /assets/* are the hashed bundles;
+// everything else falls back to index.html. The app uses hash routing, so
+// all client routes live under '#' and a single index.html covers them.
+// Registered after the API routes above so /api/* and /health take priority.
+app.use('/assets/*', serveStatic({ root: './dist' }));
+app.get('*', serveStatic({ path: './dist/index.html' }));
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(
