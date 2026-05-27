@@ -771,6 +771,124 @@ export function buildDashboardMetrics({
   ];
 }
 
+interface TeamMetricInputs {
+  /** Every issue across the team (all assignees). */
+  allIssues: Issue[];
+  /** Count of overdue team issues. */
+  pastDueCount: number;
+  teamHours: { logged: number; target: number };
+}
+
+/**
+ * Team-scoped metric cards for the Dashboard "Your Team's Work" tab. Unlike
+ * buildDashboardMetrics (which centers on the current user), every card here
+ * reflects the whole team: total tasks, in-progress, past-due, unassigned,
+ * the engineer roster, and team hours. Engineers are derived from assignees
+ * since /users 403s for the non-admin key.
+ */
+export function buildTeamMetrics({
+  allIssues,
+  pastDueCount,
+  teamHours,
+}: TeamMetricInputs): DashboardMetric[] {
+  const inProgressCount = allIssues.filter((i) => i.status === 'In Progress').length;
+  const unassignedCount = allIssues.filter((i) => !i.assignee).length;
+  const waitingCount = allIssues.filter((i) => i.status === 'Feedback').length;
+  const engineerIds = new Set(
+    allIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
+  );
+  const engineerCount = engineerIds.size;
+  const assignedCount = allIssues.length - unassignedCount;
+  const avgLoad = engineerCount > 0 ? Math.round(assignedCount / engineerCount) : 0;
+
+  return [
+    {
+      id: 'team-tasks',
+      title: 'Team tasks',
+      value: allIssues.length,
+      progress: safePercent(allIssues.length, Math.max(allIssues.length, 50)),
+      statusLabel: 'All assignees',
+      statusColor: 'blue',
+      color: '#3B82F6',
+      caption: 'total open',
+    },
+    {
+      id: 'team-in-progress',
+      title: 'In progress',
+      value: inProgressCount,
+      total: allIssues.length,
+      progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
+      statusLabel: 'Active work',
+      statusColor: 'blue',
+      color: '#8B5CF6',
+      caption: 'being worked',
+    },
+    {
+      id: 'team-past-due',
+      title: 'Team past due',
+      value: pastDueCount,
+      progress: safePercent(pastDueCount, Math.max(pastDueCount + 4, 10)),
+      statusLabel: 'Action needed',
+      statusColor: 'red',
+      color: '#EF4444',
+      caption: 'overdue',
+      route: '/past-due',
+    },
+    {
+      id: 'team-unassigned',
+      title: 'Unassigned tasks',
+      value: unassignedCount,
+      progress: safePercent(unassignedCount, Math.max(unassignedCount, 8)),
+      statusLabel: 'Triage queue',
+      statusColor: 'orange',
+      color: '#F97316',
+      caption: 'unassigned',
+    },
+    {
+      id: 'team-hours-week',
+      title: 'Team hours this week',
+      value: teamHours.logged,
+      total: teamHours.target,
+      progress: safePercent(teamHours.logged, teamHours.target),
+      statusLabel: `${teamHours.target}h target`,
+      statusColor: 'gray',
+      color: '#F59E0B',
+      caption: 'team',
+      route: '/reports',
+    },
+    {
+      id: 'team-engineers',
+      title: 'Engineers',
+      value: engineerCount,
+      progress: 100,
+      statusLabel: 'With assigned work',
+      statusColor: 'green',
+      color: '#10B981',
+      caption: 'on the team',
+    },
+    {
+      id: 'team-avg-load',
+      title: 'Avg load',
+      value: avgLoad,
+      progress: safePercent(avgLoad, Math.max(avgLoad, 10)),
+      statusLabel: 'Tasks / engineer',
+      statusColor: 'gray',
+      color: '#6366F1',
+      caption: 'per engineer',
+    },
+    {
+      id: 'team-waiting',
+      title: 'Awaiting response',
+      value: waitingCount,
+      progress: safePercent(waitingCount, Math.max(waitingCount, 6)),
+      statusLabel: 'Feedback',
+      statusColor: 'yellow',
+      color: '#EAB308',
+      caption: 'waiting',
+    },
+  ];
+}
+
 interface ReportMetricInputs {
   weeklyHours: { logged: number; target: number };
   teamHours: { logged: number; target: number };
