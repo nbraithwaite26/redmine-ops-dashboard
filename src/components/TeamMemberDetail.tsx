@@ -72,7 +72,7 @@ export default function TeamMemberDetail({ summary, onClose }: Props) {
           if (info.offset.y > 120 || info.velocity.y > 600) onClose();
         }}
         style={{ borderRadius: 0, background: 'var(--bg-card)' }}
-        className="relative flex h-full w-full max-w-md flex-col overflow-hidden shadow-2xl"
+        className="relative flex h-full w-full max-w-3xl flex-col overflow-hidden shadow-2xl"
         data-testid={`member-detail-${user.id}`}
       >
         {/* Hero — shared anchor; full-bleed gradient header. */}
@@ -143,7 +143,7 @@ export default function TeamMemberDetail({ summary, onClose }: Props) {
           <motion.h3 {...reveal(1)} className="px-1 pb-2 text-sm font-semibold text-ink">
             Projects
           </motion.h3>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {summary.projects.map((project, i) => (
               <motion.div key={project.projectId} {...reveal(i + 2)}>
                 <ProjectBlock project={project} />
