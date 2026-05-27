@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — CR #28: Microsoft Entra sign-in (MSAL Node) — flag-gated (2026-05-27)
+
+Optional SSO gate (roadmap Phase A), adapted from the `ms-identity-node`
+auth-code sample to our Hono backend.
+
+- **Backend** (`/api/auth/ms/*`): MSAL Node `ConfidentialClientApplication`
+  auth-code flow with PKCE. `signin` → Entra authorize; `redirect` → code
+  exchange + session; `me` → `{enabled, authenticated, user}`; `signout` →
+  Entra logout. Per-session MSAL state (PKCE verifier, token cache, account)
+  in a server-side store (`auth/msSessionStore.ts`). Uses **query** response
+  mode so the `SameSite=Lax` session cookie survives the redirect without
+  HTTPS in dev.
+- **Frontend**: `useMsAuth` + a `MsSignIn` gate in `App.tsx`. When enabled and
+  unauthenticated, the whole app shows "Sign in with Microsoft".
+- **Flag-gated**: `MS_AUTH_ENABLED` (default **false**) — local dev is
+  unaffected until flipped on. Identity in `MSAL_*` env (added `@azure/msal-node`).
+- **Activation pending**: the redirect URI `…/api/auth/ms/redirect` must be
+  registered in the app registration (see `docs/AZURE_APP_SETUP.md`).
+
 ### Added — CR #27: clickable project cards → spring-up task list (2026-05-27)
 
 - Project cards on **All Projects** and the **category drill-down** are now

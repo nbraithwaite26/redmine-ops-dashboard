@@ -14,6 +14,31 @@ Status legend:
 
 ---
 
+## #28 — Microsoft Entra sign-in (MSAL Node)
+
+**Status:** ✅ Built, flag-gated (2026-05-27) — activation pending redirect-URI registration
+
+**Request:** Make the dashboard work with Microsoft auth, using the
+ms-identity-node auth-code sample + the provided app identity.
+
+**Shipped:**
+- Backend `/api/auth/ms/{signin,redirect,me,signout}` (Hono) using MSAL Node
+  `ConfidentialClientApplication` + PKCE, query response mode, server-side
+  session store for MSAL state.
+- Frontend `useMsAuth` + `MsSignIn` gate in `App.tsx`.
+- `MS_AUTH_ENABLED` flag (default false); `MSAL_*` identity env; added
+  `@azure/msal-node`.
+
+**Decisions:** query response mode (vs the sample's FORM_POST) so the Lax
+session cookie survives the redirect without HTTPS in dev; full-app gate,
+flag-controlled.
+
+**To activate:** register the redirect URI `<origin>/api/auth/ms/redirect`
+(dev: `http://localhost:5173/api/auth/ms/redirect`) in the app registration,
+then set `MS_AUTH_ENABLED=true`. See `docs/AZURE_APP_SETUP.md`.
+
+---
+
 ## #27 — Clickable project cards → spring-up task list
 
 **Status:** ✅ Shipped (2026-05-27)

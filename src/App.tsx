@@ -21,9 +21,25 @@ import Hours from './pages/Hours';
 // redirect to /hours below. Files stay (deletion in Phase 4 cleanup).
 import Login from './pages/Login';
 import Admin from './pages/Admin';
+import MsSignIn from './pages/MsSignIn';
+import { useMsAuth } from './hooks/useMsAuth';
 
 export default function App() {
   const location = useLocation();
+  const ms = useMsAuth();
+
+  // Microsoft sign-in gate (only when MS_AUTH_ENABLED on the backend).
+  if (ms.loading) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-canvas text-sm text-ink-muted">
+        Loading…
+      </div>
+    );
+  }
+  if (ms.enabled && !ms.authenticated) {
+    return <MsSignIn />;
+  }
+
   // /login renders standalone (no AppShell sidebar/topbar).
   if (location.pathname === '/login') {
     return <Login />;

@@ -24,6 +24,17 @@ const schema = z.object({
   // process-local maps to Redis so they survive restarts and shard across
   // backend instances. Plan §13.
   REDIS_URL: z.string().url().optional(),
+
+  // Microsoft Entra sign-in (MSAL Node auth-code). All optional; the whole
+  // SSO gate only turns on when MS_AUTH_ENABLED=true AND the identity vars
+  // are present.
+  MS_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  MSAL_CLIENT_ID: z.string().min(1).optional(),
+  MSAL_TENANT_ID: z.string().min(1).optional(),
+  MSAL_CLOUD_INSTANCE: z.string().url().default('https://login.microsoftonline.com/'),
+  MSAL_CLIENT_SECRET: z.string().min(1).optional(),
+  MSAL_REDIRECT_URI: z.string().url().optional(),
+  MSAL_POST_LOGOUT_REDIRECT_URI: z.string().url().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -42,6 +53,14 @@ const adminEnabled = Boolean(
   env.ADMIN_USER && env.ADMIN_PASSWORD_HASH && env.SESSION_SECRET,
 );
 
+const msAuthEnabled = Boolean(
+  env.MS_AUTH_ENABLED === 'true' &&
+    env.MSAL_CLIENT_ID &&
+    env.MSAL_TENANT_ID &&
+    env.MSAL_CLIENT_SECRET &&
+    env.MSAL_REDIRECT_URI,
+);
+
 export const config = {
   redmineBaseUrl: env.REDMINE_BASE_URL.replace(/\/$/, ''),
   redmineApiKey: env.REDMINE_API_KEY,
@@ -58,6 +77,16 @@ export const config = {
     cookieSecure: env.COOKIE_SECURE === 'true',
   },
   redisUrl: env.REDIS_URL,
+  msAuth: {
+    enabled: msAuthEnabled,
+    clientId: env.MSAL_CLIENT_ID ?? '',
+    tenantId: env.MSAL_TENANT_ID ?? '',
+    cloudInstance: env.MSAL_CLOUD_INSTANCE,
+    clientSecret: env.MSAL_CLIENT_SECRET ?? '',
+    redirectUri: env.MSAL_REDIRECT_URI ?? '',
+    postLogoutRedirectUri: env.MSAL_POST_LOGOUT_REDIRECT_URI ?? '',
+    cookieSecure: env.COOKIE_SECURE === 'true',
+  },
 } as const;
 
 export type AppConfig = typeof config;

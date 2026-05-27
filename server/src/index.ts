@@ -16,6 +16,7 @@ import timeEntriesRoute from './routes/timeEntries.js';
 import metadataRoute from './routes/metadata.js';
 import ganttRoute from './routes/gantt.js';
 import authRoute from './routes/auth.js';
+import msAuthRoute from './routes/msAuth.js';
 import syncEventsRoute from './routes/syncEvents.js';
 import adminUsersRoute from './routes/admin/users.js';
 import adminPermissionsRoute from './routes/admin/permissions.js';
@@ -73,7 +74,9 @@ api.route('/gantt', ganttRoute);
 app.route('/api/redmine', api);
 
 // Auth + admin routes live OUTSIDE /api/redmine so the read-only middleware
-// does not block POST /login or POST /logout.
+// does not block POST /login or POST /logout. Mount the MS-auth group first
+// so /api/auth/ms/* isn't shadowed by the admin /api/auth routes.
+app.route('/api/auth/ms', msAuthRoute);
 app.route('/api/auth', authRoute);
 app.route('/api/sync-events', syncEventsRoute);
 
