@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FolderKanban, Search } from 'lucide-react';
+import { AnimatePresence, LayoutGroup, MotionConfig } from 'framer-motion';
+import { ArrowLeft, Search } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import ProjectCard from '../components/ProjectCard';
+import ProjectDetail from '../components/ProjectDetail';
 import { getIssues, getProjects } from '../services/redmineApi';
 import { getAllDescendants, slugify } from '../lib/projectTree';
 import { stripHtml } from '../lib/format';
@@ -21,6 +24,7 @@ export default function ProjectCategory() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'All' | ProjectStatus>('All');
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Project | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -128,46 +132,40 @@ export default function ProjectCategory() {
             Showing {filtered.length} of {categoryProjects.length}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((p) => {
-              const s = stats(p.id);
-              return (
-                <div key={p.id} className="card p-4">
-                  <div className="flex items-center gap-2 text-ink-muted">
-                    <FolderKanban size={18} />
-                    <span
-                      className={
-                        p.status === 'At Risk'
-                          ? 'pill-orange ml-auto'
-                          : p.status === 'Closed' || p.status === 'Archived'
-                          ? 'pill-gray ml-auto'
-                          : 'pill-green ml-auto'
-                      }
-                    >
-                      {p.status}
-                    </span>
+          <MotionConfig reducedMotion="user">
+            <LayoutGroup>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filtered.map((p) => {
+                  const s = stats(p.id);
+                  return (
+                    <ProjectCard
+                      key={p.id}
+                      project={p}
+                      open={s.open}
+                      total={s.total}
+                      onSelect={() => setSelected(p)}
+                    />
+                  );
+                })}
+                {!loading && categoryProjects.length === 0 && (
+                  <div className="col-span-3 text-center py-12 text-sm text-ink-muted">
+                    No projects under this category yet.
                   </div>
-                  <div className="mt-2 font-semibold">{p.name}</div>
-                  <div className="text-xs text-ink-muted">{p.identifier}</div>
-                  <p className="text-sm text-ink-soft mt-2 line-clamp-2">{stripHtml(p.description)}</p>
-                  <div className="flex items-center justify-between mt-3 text-xs text-ink-muted">
-                    <span>{s.open} open / {s.total} total</span>
-                    <span>Updated {p.updatedOn}</span>
+                )}
+                {!loading && categoryProjects.length > 0 && filtered.length === 0 && (
+                  <div className="col-span-3 text-center py-12 text-sm text-ink-muted">
+                    No projects match your filters.
                   </div>
-                </div>
-              );
-            })}
-            {!loading && categoryProjects.length === 0 && (
-              <div className="col-span-3 text-center py-12 text-sm text-ink-muted">
-                No projects under this category yet.
+                )}
               </div>
-            )}
-            {!loading && categoryProjects.length > 0 && filtered.length === 0 && (
-              <div className="col-span-3 text-center py-12 text-sm text-ink-muted">
-                No projects match your filters.
-              </div>
-            )}
-          </div>
+
+              <AnimatePresence>
+                {selected && (
+                  <ProjectDetail project={selected} onClose={() => setSelected(null)} />
+                )}
+              </AnimatePresence>
+            </LayoutGroup>
+          </MotionConfig>
         </>
       )}
     </div>

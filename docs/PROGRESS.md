@@ -36,6 +36,7 @@ _Last updated: 2026-05-27._
 | **CR #23 — Engineer detail refinements** | Detail projects collapsed → expand to subtasks; card/detail show logged hours only (no "expected"); This week / Last week switcher drives week-scoped logged hours via `aggregateHours`. |
 | **CR #24 — Card rings + week-driven team hours** | Donut rings reserved for hours cards (count cards show plain numbers); the week toggle now also re-scopes the team-hours metric card (week summed from time entries). |
 | **CR #25 — Engineers-out calendar (UI)** | Engineers metric → `EngineersOutCard` ("N out this week") morphs into a full-screen `TimeOffDetail` (week⇄month, nav, color legend). New `getTimeOff` seam: mock seeded, **real mode empty pending the AE-calendar source**. |
+| **CR #27 — Project cards → task spring-up** | `ProjectCard`/`ProjectDetail` make project cards (AllProjects + category drill-down) morph into a full-screen related-tasks list. New `getIssuesByProject` service. |
 
 ## Known live-data gotchas (carry forward)
 
