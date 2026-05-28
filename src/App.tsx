@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './components/AppShell';
 import RequireAdmin from './components/RequireAdmin';
@@ -22,7 +23,27 @@ import Hours from './pages/Hours';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 
+// One-shot: the default team selection grew from 6 to 12 engineers (and
+// 'svillasenor' was corrected to 'nvillasenor'). Anyone whose browser
+// still has the prior 6-engineer selection saved gets it cleared once so
+// the new default picks up on next render. Safe to delete after every
+// active user has hit the app at least once post-migration.
+const TEAM_SELECTION_MIGRATION_KEY = 'rod.team.selection.migration.v2';
+
+function clearLegacyTeamSelection(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(TEAM_SELECTION_MIGRATION_KEY) === 'done') return;
+    localStorage.removeItem('rod.team.selectedUserIds');
+    localStorage.setItem(TEAM_SELECTION_MIGRATION_KEY, 'done');
+  } catch {
+    // privacy mode / storage disabled — ignore
+  }
+}
+
 export default function App() {
+  useEffect(clearLegacyTeamSelection, []);
+
   const location = useLocation();
   // /login renders standalone (no AppShell sidebar/topbar).
   if (location.pathname === '/login') {
