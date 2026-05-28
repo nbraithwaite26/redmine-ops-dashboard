@@ -97,7 +97,13 @@ serve({ fetch: app.fetch, port: config.port }, (info) => {
   if (config.cache.warmEnabled) {
     startWarmer({
       request: async (path) =>
-        app.fetch(new Request(`http://localhost:${info.port}${path}`)),
+        app.fetch(
+          new Request(`http://localhost:${info.port}${path}`, {
+            // Bypass the rate limiter so the warmer doesn't eat the
+            // user's per-IP quota during paginated walks.
+            headers: { 'x-internal-warmer': '1' },
+          }),
+        ),
       intervalMs: config.cache.warmIntervalMs,
       onError: (taskName, err) => {
         const msg = err instanceof Error ? err.message : String(err);

@@ -27,18 +27,39 @@ describe('rateLimit middleware — in-memory fallback', () => {
   });
 
   it('429s once the bucket is exhausted', async () => {
+    // Freeze time so the bucket can't refill while the loop drains it.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-28T12:00:00Z'));
+    try {
+      const app = await makeApp();
+      const { __clearMemBuckets } = await import('../src/middleware/rateLimit.js');
+      __clearMemBuckets();
+      // BURST = 200; the 201st should be rejected.
+      for (let i = 0; i < 200; i += 1) {
+        const ok = await app.request('/ping', { headers: { 'x-real-ip': '5.5.5.5' } });
+        expect(ok.status).toBe(200);
+      }
+      const blocked = await app.request('/ping', { headers: { 'x-real-ip': '5.5.5.5' } });
+      expect(blocked.status).toBe(429);
+      const body = (await blocked.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('RATE_LIMITED');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bypasses the rate limit when the x-internal-warmer header is present', async () => {
     const app = await makeApp();
     const { __clearMemBuckets } = await import('../src/middleware/rateLimit.js');
     __clearMemBuckets();
-    // BURST = 40; the 41st should be rejected.
-    for (let i = 0; i < 40; i += 1) {
-      const ok = await app.request('/ping', { headers: { 'x-real-ip': '5.5.5.5' } });
+    // Drain past the new burst ceiling — would normally 429 — but the
+    // warmer-flagged request still passes.
+    for (let i = 0; i < 300; i += 1) {
+      const ok = await app.request('/ping', {
+        headers: { 'x-real-ip': '5.5.5.5', 'x-internal-warmer': '1' },
+      });
       expect(ok.status).toBe(200);
     }
-    const blocked = await app.request('/ping', { headers: { 'x-real-ip': '5.5.5.5' } });
-    expect(blocked.status).toBe(429);
-    const body = (await blocked.json()) as { error: { code: string } };
-    expect(body.error.code).toBe('RATE_LIMITED');
   });
 });
 
@@ -96,8 +117,8 @@ describe('rateLimit middleware — Redis branch (REDIS_URL set, ioredis mocked)'
     vi.doMock('ioredis', () => ({ default: vi.fn(() => stub) }));
 
     const app = await makeApp();
-    // BURST = 40, so simulate 41 hits via the mocked counter.
-    for (let i = 0; i < 40; i += 1) {
+    // BURST = 200, so simulate 201 hits via the mocked counter.
+    for (let i = 0; i < 200; i += 1) {
       const ok = await app.request('/ping', { headers: { 'x-real-ip': '8.8.8.8' } });
       expect(ok.status).toBe(200);
     }
