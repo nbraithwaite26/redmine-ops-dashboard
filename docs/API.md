@@ -80,9 +80,21 @@ domain objects via the adapters in `server/src/adapters/`.
 | GET | `/api/redmine/metadata` | Bundled `{ statuses, trackers, priorities, timeActivities, customFields }` |
 | GET | `/api/redmine/gantt` | Composite Gantt rows (issues + estimates + relations + overload flags) |
 
-Write endpoints (`PATCH/POST/DELETE`) are planned for Plan Section 10 and
-will live under the same paths. Until then the read-only middleware
-catches them.
+All GETs above route through the **server-side TTL cache** (CR #29) with
+60s for lists, 10s for issue detail, and 5min for `/metadata`. The gantt
+route also runs pagination in parallel (cap 4) after learning `total_count`
+from page 0, and is the only route with SWR (5min stale window). Writes
+(`PATCH/POST/DELETE` on `/issues` and `/time-entries`) invalidate the
+matching prefixes: issue writes drop `issues:*` and `gantt:*`; time-entry
+writes drop `time-entries:*`.
+
+Cache admin (admin-session-gated, mounted under `/api/admin/_cache`):
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/api/admin/_cache/invalidate` | Clear everything. Returns `{ removed }`. |
+| POST | `/api/admin/_cache/invalidate?prefix=…` | Clear keys starting with `prefix` (trailing `*` tolerated). |
+| GET | `/api/admin/_cache/stats` | `{ hits, misses, staleHits, coalesced, evictions, rejectedTooLarge, size }` for debugging. |
 
 ---
 

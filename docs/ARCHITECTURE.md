@@ -64,7 +64,7 @@ src/                          Frontend
 
   services/
     redmineApi.ts               Facade — picks real vs. mock from VITE_MOCK_MODE
-    realRedmineApi.ts           HTTP client + TTL cache + metadata coordinator
+    realRedmineApi.ts           HTTP client + metadata coordinator (server owns the cache)
     mockRedmineApi.ts           In-memory fabricator (offline demos + tests)
     adminApi.ts                 /api/auth + /api/admin + /api/sync-events client
     http.ts                     Shared fetch helper for the Redmine proxy
@@ -169,13 +169,45 @@ fan-out the prior design had.
   endpoint sits **outside** `/api/redmine/*` so the read-only middleware
   doesn't block it.
 
-### Caching
+### Caching (CR #29)
 
-`realRedmineApi.ts` wraps GETs in a TTL cache (60s default, 10s for
-`/issues`). `syncWithRedmine()` blows the cache so the next fetches go to
-the network. The frontend writes the timestamp to `localStorage` under
+Cache lives on the **server** (`server/src/cache.ts`) and is shared across
+all browsers — a fresh tab pays no cold cost once the cache is warm.
+Features: TTL get-or-fetch, stale-while-revalidate, in-flight coalescing
+(concurrent misses share one upstream fetch), bounded LRU, per-entry size
+guard, prefix-scoped `invalidate()`.
+
+Cached GET routes and TTLs:
+
+| Route | TTL | Notes |
+| --- | --- | --- |
+| `/gantt` | 60s + 5min SWR | Derived rows, plus pages 1..N fan out in parallel after page 0 reports `total_count`. |
+| `/issues` list | 60s | Keyed per filter set. |
+| `/issues/:id` | 10s | Detail TTL is short — issues mutate often. |
+| `/projects` list | 60s | Keyed per page. The warmer walks all pages. |
+| `/projects/:id`, `/projects/:id/members` | 60s | |
+| `/time-entries` | 60s | Keyed per filter set. |
+| `/users`, `/me` | 60s | |
+| `/metadata` | 5 min | Whole bundle — enums rarely change. |
+
+Writes invalidate the relevant prefixes:
+- Issue POST / PATCH / DELETE → `invalidate('issues:')` + `invalidate('gantt:')`
+- Time-entry POST / PATCH / DELETE → `invalidate('time-entries:')`
+
+**Warmer**: on boot and every `CACHE_WARM_INTERVAL_MS` (default 5 min),
+`server/src/warmer.ts` pre-fetches the team gantt for project 127 and walks
+the full projects list, so the first user hit is a cache hit. Disable with
+`CACHE_WARM_ENABLED=false` (forced off in tests).
+
+**Sync button**: `realRedmineApi.syncWithRedmine()` POSTs
+`/api/admin/_cache/invalidate` (admin-gated; fails open for non-admin
+sessions). The frontend writes the sync timestamp to `localStorage` under
 `redmine-ops:last-sync-at` so the "Last sync HH:MM" chip in the TopBar
 persists across reloads.
+
+The browser keeps only an in-render metadata coordinator (multiple dropdown
+selectors mounted at once share a single `/metadata` call). No browser-side
+TTL cache — the server is the single source of truth for staleness.
 
 ### Session + rate-limit storage
 

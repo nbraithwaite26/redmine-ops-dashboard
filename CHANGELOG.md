@@ -6,6 +6,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance — CR #29: speed up Redmine API pulls (2026-05-28)
+
+Server-side cache, parallel pagination, and a boot-time warmer.
+
+- **Server-side TTL cache** (`server/src/cache.ts`) with stale-while-
+  revalidate, in-flight coalescing (concurrent misses share one upstream
+  fetch), bounded LRU, prefix-scoped invalidation, per-entry size guard.
+- **Parallel pagination** in `/gantt`: page 0 first to learn `total_count`,
+  then pages 1..N dispatched with bounded concurrency (cap 4). Derived rows
+  cached under a per-filter-set key with 60s TTL + 5min SWR.
+- **Cache opt-in for every GET route**: `/issues` (list + detail), `/projects`
+  (list + detail + members), `/metadata` (whole bundle, 5min), `/time-entries`,
+  `/users`, `/me`. Each routes through a shared `keyFromParts(prefix, params)`
+  helper for stable keys.
+- **Write invalidation**: issue writes drop `issues:*` + `gantt:*`;
+  time-entry writes drop `time-entries:*`.
+- **Boot-time + interval warmer** (`server/src/warmer.ts`): default tasks
+  are the team gantt for project 127 and the full projects list walked to
+  `total_count`. Failures are isolated via `Promise.allSettled`; exponential
+  backoff to 15 min after a failed cycle. Env: `CACHE_WARM_ENABLED` (default
+  true), `CACHE_WARM_INTERVAL_MS` (default 300_000).
+- **Admin cache control**: `POST /api/admin/_cache/invalidate[?prefix=…]`
+  and `GET /api/admin/_cache/stats` (admin-session-gated).
+- **Browser-side cache removed**. Server is the single source of truth;
+  `realRedmineApi.ts` keeps only the in-render metadata coordinator.
+  `syncWithRedmine()` now POSTs the invalidate endpoint.
+
+Live measurement (read-only mode against redmine.avionica.com, project 127):
+- **Cold** (fresh server, empty cache): ~9s → **5.05s** (~44% faster).
+- **Warm** (cache hit): ~9s → **9.7–19.8ms** (>250× faster).
+- Cache keyed correctly per filter set; payload byte-for-byte identical
+  to upstream.
+
+After the warmer's initial pass, real users hitting the Dashboard Team tab
+get the cache-hit path on first load.
+
 ### Added — CR #27: clickable project cards → spring-up task list (2026-05-27)
 
 - Project cards on **All Projects** and the **category drill-down** are now
