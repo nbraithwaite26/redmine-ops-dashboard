@@ -2,6 +2,9 @@
  * Shared test bootstrap. Sets the env vars config.ts needs so any module
  * that imports ../src/config doesn't exit the process.
  */
+import { beforeEach } from 'vitest';
+import { resetCache } from '../src/cache.js';
+
 process.env.REDMINE_BASE_URL = 'https://example.invalid';
 process.env.REDMINE_API_KEY = 'test-key';
 process.env.REDMINE_READ_ONLY = 'true';
@@ -15,3 +18,10 @@ process.env.ADMIN_PASSWORD_HASH =
 process.env.SESSION_SECRET = 'test-session-secret-at-least-32-bytes-long';
 process.env.HISTORY_DB = './server/test/.tmp-history.jsonl';
 process.env.COOKIE_SECURE = 'false';
+
+// The server-side cache (CR #29) is module-level singleton state. Clear it
+// before every test so suites that exercise cached routes don't bleed into
+// each other.
+beforeEach(() => {
+  resetCache();
+});
