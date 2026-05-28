@@ -786,6 +786,12 @@ interface TeamMetricInputs {
   teamHours: { logged: number; target: number };
   /** Week label for the team-hours card title, e.g. "this week" / "last week". */
   teamHoursWeekLabel?: string;
+  /**
+   * Sum of tasks assigned to the engineers currently picked in the team-
+   * member selector. When provided, replaces the "In progress" card with
+   * an "Assigned tasks" card scoped to the selected engineers.
+   */
+  selectedAssignedTasks?: number;
 }
 
 /**
@@ -801,6 +807,7 @@ export function buildTeamMetrics({
   dueThisWeekCount,
   teamHours,
   teamHoursWeekLabel = 'this week',
+  selectedAssignedTasks,
 }: TeamMetricInputs): DashboardMetric[] {
   const inProgressCount = allIssues.filter((i) => i.status === 'In Progress').length;
   const unassignedCount = allIssues.filter((i) => !i.assignee).length;
@@ -809,6 +816,32 @@ export function buildTeamMetrics({
     allIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
   );
   const engineerCount = engineerIds.size;
+  const assignedCard: DashboardMetric =
+    selectedAssignedTasks !== undefined
+      ? {
+          id: 'team-assigned-tasks',
+          title: 'Tasks assigned',
+          value: selectedAssignedTasks,
+          progress: safePercent(
+            selectedAssignedTasks,
+            Math.max(selectedAssignedTasks, 1),
+          ),
+          statusLabel: 'To selected engineers',
+          statusColor: 'blue',
+          color: '#8B5CF6',
+          caption: 'open',
+        }
+      : {
+          id: 'team-in-progress',
+          title: 'In progress',
+          value: inProgressCount,
+          total: allIssues.length,
+          progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
+          statusLabel: 'Active work',
+          statusColor: 'blue',
+          color: '#8B5CF6',
+          caption: 'being worked',
+        };
 
   const cards: DashboardMetric[] = [
     {
@@ -821,17 +854,7 @@ export function buildTeamMetrics({
       color: '#3B82F6',
       caption: 'total open',
     },
-    {
-      id: 'team-in-progress',
-      title: 'In progress',
-      value: inProgressCount,
-      total: allIssues.length,
-      progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
-      statusLabel: 'Active work',
-      statusColor: 'blue',
-      color: '#8B5CF6',
-      caption: 'being worked',
-    },
+    assignedCard,
     {
       id: 'team-past-due',
       title: 'Team past due',

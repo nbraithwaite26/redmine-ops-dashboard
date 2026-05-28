@@ -28,7 +28,7 @@ export const DEFAULT_TEAM_LOGINS = [
   'fketter',
   'agrasso',
   'kgonzalez',
-  'svillasenor',
+  'nvillasenor',
   'nbraithwaite',
   'rdelgado',
   'vcrodrigues',

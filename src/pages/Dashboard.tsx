@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
   const [teamLogged, setTeamLogged] = useState(0);
+  const [selectedTasks, setSelectedTasks] = useState(0);
   const [outCount, setOutCount] = useState(0);
   const [timeOffOpen, setTimeOffOpen] = useState(false);
 
@@ -95,6 +96,7 @@ export default function Dashboard() {
     dueThisWeekCount,
     teamHours: { logged: teamLogged, target: TEAM_HOURS_TARGET },
     teamHoursWeekLabel: week === 0 ? 'this week' : 'last week',
+    selectedAssignedTasks: selectedTasks,
   });
 
   return (
@@ -144,6 +146,7 @@ export default function Dashboard() {
             week={week}
             onWeekChange={setWeek}
             onSelectedHoursChange={setTeamLogged}
+            onSelectedTasksChange={setSelectedTasks}
           />
 
           <AnimatePresence>

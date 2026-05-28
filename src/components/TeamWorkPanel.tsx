@@ -27,6 +27,12 @@ interface Props {
    * in the picker, so the card reflects exactly what's on screen.
    */
   onSelectedHoursChange?: (totalHours: number) => void;
+  /**
+   * Fires whenever the count of tasks assigned to the visible engineers
+   * changes. Same idea as onSelectedHoursChange but for the assigned-
+   * tasks metric.
+   */
+  onSelectedTasksChange?: (totalTasks: number) => void;
 }
 
 /**
@@ -43,6 +49,7 @@ export default function TeamWorkPanel({
   week: weekProp,
   onWeekChange,
   onSelectedHoursChange,
+  onSelectedTasksChange,
 }: Props = {}) {
   // Controlled by the parent when props are supplied; otherwise self-managed.
   const [weekState, setWeekState] = useState<WeekOffset>(0);
@@ -121,9 +128,9 @@ export default function TeamWorkPanel({
     [rows, openId],
   );
 
-  // Total hours across only the currently-visible (selected) engineers.
-  // Reported up so the Dashboard's "Team hours" metric can scope itself
-  // to the same set the picker is showing.
+  // Totals across only the currently-visible (selected) engineers.
+  // Reported up so the Dashboard's "Team hours" and "Assigned tasks"
+  // metrics scope to the same set the picker is showing.
   const visibleHoursTotal = useMemo(
     () =>
       Math.round(
@@ -132,9 +139,18 @@ export default function TeamWorkPanel({
     [visibleRows],
   );
 
+  const visibleTasksTotal = useMemo(
+    () => visibleRows.reduce((sum, r) => sum + r.taskCount, 0),
+    [visibleRows],
+  );
+
   useEffect(() => {
     onSelectedHoursChange?.(visibleHoursTotal);
   }, [visibleHoursTotal, onSelectedHoursChange]);
+
+  useEffect(() => {
+    onSelectedTasksChange?.(visibleTasksTotal);
+  }, [visibleTasksTotal, onSelectedTasksChange]);
 
   const updateSelection = (ids: number[]) => {
     setSelectedIds(ids);
