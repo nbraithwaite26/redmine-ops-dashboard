@@ -75,6 +75,25 @@ export function configureCache(opts: {
 }
 
 /**
+ * Builds a stable cache key from a prefix + an optional parameter map.
+ * Keys are deterministic regardless of insertion order, and empty/undefined
+ * values are dropped. Examples:
+ *   keyFromParts('issues:list', { project_id: '127' }) → 'issues:list:project_id=127'
+ *   keyFromParts('me:current')                          → 'me:current'
+ */
+export function keyFromParts(
+  prefix: string,
+  params?: Record<string, string | number | undefined | null>,
+): string {
+  if (!params) return prefix;
+  const parts = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`);
+  return parts.length ? `${prefix}:${parts.join('&')}` : prefix;
+}
+
+/**
  * Drop cache entries. With no argument, clears everything. With a prefix,
  * drops keys starting with it. A trailing `*` is tolerated:
  * `invalidate('issues:*')` and `invalidate('issues:')` behave the same.

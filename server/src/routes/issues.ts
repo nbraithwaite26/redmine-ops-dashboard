@@ -2,12 +2,22 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { redmineFetch, RedmineHttpError } from '../redmineClient.js';
 import { adaptIssue } from '../adapters/issue.js';
+import { invalidate, keyFromParts } from '../cache.js';
 import { paginated, paginationSchema, passthroughQuery } from './_helpers.js';
 import type {
   RedmineEnumerationDto,
   RedmineIssueDto,
 } from '../types/redmineDto.js';
 import type { AppEnv } from '../types/appVars.js';
+
+const LIST_TTL_MS = 60_000;
+const DETAIL_TTL_MS = 10_000;
+
+/** Drop everything that could be stale after an issue write (CR #29). */
+function invalidateAfterIssueWrite(): void {
+  invalidate('issues:');
+  invalidate('gantt:');
+}
 
 const issues = new Hono<AppEnv>();
 
@@ -41,6 +51,10 @@ issues.get('/', async (c) => {
     offset: number;
   }>('/issues.json', {
     query: { limit: q.limit, offset: q.offset, ...filters },
+    cache: {
+      key: keyFromParts('issues:list', { limit: q.limit, offset: q.offset, ...filters }),
+      ttlMs: LIST_TTL_MS,
+    },
   });
 
   return c.json(
@@ -57,6 +71,7 @@ issues.get('/:id{[0-9]+}', async (c) => {
   const id = Number(c.req.param('id'));
   const raw = await redmineFetch<{ issue: RedmineIssueDto }>(`/issues/${id}.json`, {
     query: { include: 'children,relations,journals,attachments' },
+    cache: { key: keyFromParts('issues:detail', { id }), ttlMs: DETAIL_TTL_MS },
   });
   return c.json(adaptIssue(raw.issue));
 });
@@ -282,6 +297,7 @@ issues.post('/', async (c) => {
     throw err;
   }
 
+  invalidateAfterIssueWrite();
   return c.json(adaptIssue(created.issue), 201);
 });
 
@@ -303,6 +319,7 @@ issues.delete('/:id{[0-9]+}', async (c) => {
     throw err;
   }
 
+  invalidateAfterIssueWrite();
   return c.json({ id });
 });
 
@@ -366,10 +383,15 @@ issues.patch('/:id{[0-9]+}', async (c) => {
     throw err;
   }
 
+  // Drop any cached views of this issue (and the gantt) before re-fetching,
+  // so the refetch repopulates the cache with the post-PUT state.
+  invalidateAfterIssueWrite();
+
   // Re-fetch so the response carries the canonical updated issue, including
   // computed fields (closed_on if status flipped to a closed one, etc.).
   const fresh = await redmineFetch<{ issue: RedmineIssueDto }>(`/issues/${id}.json`, {
     query: { include: 'children,relations,journals,attachments' },
+    cache: { key: keyFromParts('issues:detail', { id }), ttlMs: DETAIL_TTL_MS },
   });
   return c.json(adaptIssue(fresh.issue));
 });

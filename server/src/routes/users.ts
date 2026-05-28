@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { redmineFetch } from '../redmineClient.js';
 import { adaptUser } from '../adapters/user.js';
+import { keyFromParts } from '../cache.js';
 import { paginated, paginationSchema } from './_helpers.js';
 import type { RedmineUserDto } from '../types/redmineDto.js';
 
 const users = new Hono();
+
+const LIST_TTL_MS = 60_000;
 
 users.get('/', async (c) => {
   const q = paginationSchema.parse(c.req.query());
@@ -13,7 +16,13 @@ users.get('/', async (c) => {
     total_count: number;
     limit: number;
     offset: number;
-  }>('/users.json', { query: { limit: q.limit, offset: q.offset } });
+  }>('/users.json', {
+    query: { limit: q.limit, offset: q.offset },
+    cache: {
+      key: keyFromParts('users:list', { limit: q.limit, offset: q.offset }),
+      ttlMs: LIST_TTL_MS,
+    },
+  });
 
   return c.json(
     paginated({

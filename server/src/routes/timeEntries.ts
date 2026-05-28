@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { redmineFetch, RedmineHttpError } from '../redmineClient.js';
 import { adaptTimeEntry } from '../adapters/timeEntry.js';
+import { invalidate, keyFromParts } from '../cache.js';
 import { paginated, paginationSchema, passthroughQuery } from './_helpers.js';
 import type {
   RedmineEnumerationDto,
@@ -10,6 +11,8 @@ import type {
 import type { AppEnv } from '../types/appVars.js';
 
 const timeEntries = new Hono<AppEnv>();
+
+const LIST_TTL_MS = 60_000;
 
 const LIST_FILTERS = [
   'user_id',
@@ -35,6 +38,14 @@ timeEntries.get('/', async (c) => {
     offset: number;
   }>('/time_entries.json', {
     query: { limit: q.limit, offset: q.offset, ...filters },
+    cache: {
+      key: keyFromParts('time-entries:list', {
+        limit: q.limit,
+        offset: q.offset,
+        ...filters,
+      }),
+      ttlMs: LIST_TTL_MS,
+    },
   });
 
   return c.json(
@@ -187,6 +198,7 @@ timeEntries.post('/', async (c) => {
     throw err;
   }
 
+  invalidate('time-entries:');
   return c.json(adaptTimeEntry(created.time_entry), 201);
 });
 
@@ -255,6 +267,7 @@ timeEntries.patch('/:id{[0-9]+}', async (c) => {
     throw err;
   }
 
+  invalidate('time-entries:');
   const fresh = await redmineFetch<{ time_entry: RedmineTimeEntryDto }>(
     `/time_entries/${id}.json`,
   );
@@ -279,6 +292,7 @@ timeEntries.delete('/:id{[0-9]+}', async (c) => {
     throw err;
   }
 
+  invalidate('time-entries:');
   return c.json({ id });
 });
 
