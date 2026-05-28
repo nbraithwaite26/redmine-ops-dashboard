@@ -53,6 +53,13 @@ Built, validated (typecheck/lint/build, 389 tests), and verified in-browser
 
 ## Backlog (open)
 
+- **CR #29 — Speed up Redmine API pulls** (📝 scaffold drafted). Server-side
+  TTL cache layered over `redmineFetch`, parallel pagination in the gantt
+  route, in-flight coalescing, boot-time prefetch + SWR for hot keys, and
+  shrink the redundant browser-side cache. Target: cold gantt ≤ ~5s (from
+  ~9s), warm ≤ 1s end-to-end. Unblocks the Dashboard "Team" tab and Hours
+  "Show team" slowness without waiting on the Phase D/E platform work. See
+  `docs/CHANGE_REQUESTS.md` #29.
 - **CR #26 — TrackOpportunities CRM card** (Home card: 80–100% default
   probability filter, spring-up detail with aircraft/customer/topic +
   probability filters; 3D plane models later). **Blocked**: Dataverse
