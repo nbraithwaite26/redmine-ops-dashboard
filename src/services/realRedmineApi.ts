@@ -139,97 +139,37 @@ function ganttRowToIssue(row: GanttRow): Issue {
 }
 
 // ─── Metadata coordinator (plan §7.8.1) ──────────────────────────────────
-// All four metadata methods share a single in-flight Promise<MetadataBundle>.
-// First caller triggers /metadata; subsequent callers await the same
-// promise. syncWithRedmine() resets it.
+// CR #29: list/detail caches are now authoritative on the server. The
+// metadata coordinator stays here only as in-render dedup — multiple
+// dropdown selectors mounted in the same render share one /metadata call
+// instead of issuing N parallel ones. syncWithRedmine() resets it.
 
-const METADATA_TTL_MS = 5 * 60 * 1000;
 let metadataPromise: Promise<MetadataBundle> | null = null;
-let metadataFetchedAt = 0;
 
 function getMetadata(): Promise<MetadataBundle> {
-  const now = Date.now();
-  if (metadataPromise && now - metadataFetchedAt < METADATA_TTL_MS) {
-    return metadataPromise;
-  }
-  metadataFetchedAt = now;
+  if (metadataPromise) return metadataPromise;
   metadataPromise = httpGet<MetadataBundle>('/metadata').catch((err) => {
-    // Reset so the next call re-tries; do not cache a failure indefinitely.
     metadataPromise = null;
     throw err;
   });
   return metadataPromise;
 }
 
-// ─── Generic TTL cache for GETs (plan §7.4) ──────────────────────────────
-// Reduces Redmine round-trips. Keyed by `${path}?${sortedQuery}`. List
-// endpoints use a longer TTL than per-issue detail because list pages are
-// hit repeatedly during a single page load.
-
-const LIST_TTL_MS = 60 * 1000; // 60s for list endpoints
-const DETAIL_TTL_MS = 10 * 1000; // 10s for issue detail
-
-interface CacheEntry {
-  fetchedAt: number;
-  data: unknown;
-}
-
-const cache = new Map<string, CacheEntry>();
-
-function cacheKey(
-  path: string,
-  query: Record<string, string | number | undefined | null> | undefined,
-): string {
-  if (!query) return path;
-  const pairs = Object.entries(query)
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`);
-  return pairs.length ? `${path}?${pairs.join('&')}` : path;
-}
-
-async function cachedGet<T>(
-  path: string,
-  query?: Record<string, string | number | undefined | null>,
-  ttlMs: number = LIST_TTL_MS,
-): Promise<T> {
-  const key = cacheKey(path, query);
-  const now = Date.now();
-  const entry = cache.get(key);
-  if (entry && now - entry.fetchedAt < ttlMs) {
-    return entry.data as T;
-  }
-  const data = await httpGet<T>(path, query);
-  cache.set(key, { fetchedAt: now, data });
-  return data;
-}
-
-function clearCaches() {
-  metadataPromise = null;
-  metadataFetchedAt = 0;
-  cache.clear();
-}
-
 /**
- * Invalidate every cache entry that could be stale after a single-issue
- * mutation: the issue's own detail row, and every list endpoint (since
- * the new state may affect filters, counts, sort order). Cheaper than
- * `clearCaches()` because it keeps unrelated GETs warm.
+ * Best-effort: ask the server to clear its cache so the next reads go
+ * upstream. Fails open — if the user is not an admin session, the 401
+ * is silently swallowed and the next reads still hit the server cache
+ * (whose TTLs are short enough that the user gets fresh data soon
+ * anyway).
  */
-function clearIssueCacheFor(id: number) {
-  for (const key of cache.keys()) {
-    if (key.startsWith('/issues') || key === `/issues/${id}`) {
-      cache.delete(key);
-    }
-  }
-}
-
-/** Drop every cached `/time-entries*` list response. */
-function clearTimeEntryCache() {
-  for (const key of cache.keys()) {
-    if (key.startsWith('/time-entries')) {
-      cache.delete(key);
-    }
+async function invalidateServerCache(): Promise<void> {
+  try {
+    await fetch('/api/admin/_cache/invalidate', {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+  } catch {
+    // Network error or non-admin session — ignore.
   }
 }
 
@@ -341,7 +281,8 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async syncWithRedmine(): Promise<{ syncedAt: string }> {
-    clearCaches();
+    metadataPromise = null;
+    await invalidateServerCache();
     lastSync = new Date().toISOString();
     return { syncedAt: lastSync };
   },
@@ -353,7 +294,7 @@ export const realRedmineApi: RedmineApi = {
     const MAX_PAGES = 50; // safety cap (≈5000 projects)
     const collected: ProjectDetailWire[] = [];
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const res = await cachedGet<PaginatedWire<ProjectDetailWire>>('/projects', {
+      const res = await httpGet<PaginatedWire<ProjectDetailWire>>('/projects', {
         limit: PAGE,
         offset: page * PAGE,
       });
@@ -381,12 +322,12 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getIssues(): Promise<Issue[]> {
-    const res = await cachedGet<PaginatedWire<Issue>>('/issues', { limit: 100 });
+    const res = await httpGet<PaginatedWire<Issue>>('/issues', { limit: 100 });
     return res.items;
   },
 
   async getIssuesByProject(projectId: number): Promise<Issue[]> {
-    const res = await cachedGet<PaginatedWire<Issue>>('/issues', {
+    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
       project_id: projectId,
       limit: 100,
     });
@@ -395,7 +336,7 @@ export const realRedmineApi: RedmineApi = {
 
   async getMyIssues(userId?: number): Promise<Issue[]> {
     const assignedTo = userId === undefined ? 'me' : String(userId);
-    const res = await cachedGet<PaginatedWire<Issue>>('/issues', {
+    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
       assigned_to_id: assignedTo,
       limit: 100,
     });
@@ -404,7 +345,7 @@ export const realRedmineApi: RedmineApi = {
 
   async getPastDueIssues(today?: Date): Promise<Issue[]> {
     const cutoff = (today ?? new Date()).toISOString().slice(0, 10);
-    const res = await cachedGet<PaginatedWire<Issue>>('/issues', {
+    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
       due_date: `<=${cutoff}`,
       status_id: 'open',
       limit: 100,
@@ -414,7 +355,7 @@ export const realRedmineApi: RedmineApi = {
 
   async getIssueById(id: number): Promise<Issue | null> {
     try {
-      return await cachedGet<Issue>(`/issues/${id}`, undefined, DETAIL_TTL_MS);
+      return await httpGet<Issue>(`/issues/${id}`);
     } catch (err) {
       if (err instanceof HttpError && err.status === 404) return null;
       throw err;
@@ -446,12 +387,8 @@ export const realRedmineApi: RedmineApi = {
     if (input.doneRatio !== undefined) body.doneRatio = input.doneRatio;
     if ('parentIssueId' in input) body.parentIssueId = input.parentIssueId;
 
-    const created = await httpJson<Issue>('POST', '/issues', body);
-    // List endpoints are stale now.
-    for (const key of cache.keys()) {
-      if (key.startsWith('/issues')) cache.delete(key);
-    }
-    return created;
+    // Server-side write routes invalidate the server cache (CR #29).
+    return httpJson<Issue>('POST', '/issues', body);
   },
   async updateIssue(id: number, patch: Partial<Issue>): Promise<Issue> {
     // Build a curated patch body matching the backend's PATCH allowlist.
@@ -481,36 +418,25 @@ export const realRedmineApi: RedmineApi = {
       }));
     }
 
-    const updated = await httpJson<Issue>('PATCH', `/issues/${id}`, body);
-    // Invalidate the cache entries that could now be stale.
-    clearIssueCacheFor(id);
-    return updated;
+    // Server-side write routes invalidate the server cache (CR #29).
+    return httpJson<Issue>('PATCH', `/issues/${id}`, body);
   },
   async deleteIssue(id: number): Promise<{ id: number }> {
-    const result = await httpJson<{ id: number }>('DELETE', `/issues/${id}`);
-    clearIssueCacheFor(id);
-    return result;
+    return httpJson<{ id: number }>('DELETE', `/issues/${id}`);
   },
   async addIssueComment(id: number, comment: string): Promise<{ id: number }> {
     // Redmine attaches a comment as a journal entry on PUT /issues/:id.json
     // with a `notes` field. Our backend PATCH allowlist already supports it.
     await httpJson<Issue>('PATCH', `/issues/${id}`, { notes: comment });
-    clearIssueCacheFor(id);
     return { id };
   },
   async addSubtask(parentId: number, input: Partial<Issue>): Promise<Issue> {
     // Subtasks are issues with parent_issue_id set. Route through createIssue
-    // so the same validation + cache invalidation applies.
-    const child = await this.createIssue({ ...input, parentIssueId: parentId });
-    // The parent's children[] is now stale; drop its detail entry.
-    clearIssueCacheFor(parentId);
-    return child;
+    // so the same validation applies.
+    return this.createIssue({ ...input, parentIssueId: parentId });
   },
   async updateIssueHierarchy(id: number, parentId: number | null): Promise<Issue> {
-    const updated = await httpJson<Issue>('PATCH', `/issues/${id}`, { parentIssueId: parentId });
-    clearIssueCacheFor(id);
-    if (parentId !== null) clearIssueCacheFor(parentId);
-    return updated;
+    return httpJson<Issue>('PATCH', `/issues/${id}`, { parentIssueId: parentId });
   },
 
   async getTimeEntries(opts: {
@@ -520,15 +446,14 @@ export const realRedmineApi: RedmineApi = {
     issueId?: number;
   } = {}): Promise<TimeEntry[]> {
     // Backend honors from / to / user_id / issue_id as passthrough query
-    // params (see server/src/routes/timeEntries.ts LIST_FILTERS). Cache key
-    // includes them via cacheKey()'s sorted-query serialization so different
-    // ranges don't collide.
+    // params (see server/src/routes/timeEntries.ts LIST_FILTERS). The server
+    // cache (CR #29) keys list responses by filter set.
     const query: Record<string, string | number> = { limit: 100 };
     if (opts.from) query.from = opts.from;
     if (opts.to) query.to = opts.to;
     if (opts.userId !== undefined) query.user_id = opts.userId;
     if (opts.issueId !== undefined) query.issue_id = opts.issueId;
-    const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', query);
+    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', query);
     return res.items;
   },
 
@@ -555,9 +480,8 @@ export const realRedmineApi: RedmineApi = {
     if (input.projectId !== undefined) body.projectId = input.projectId;
     if (input.issueId !== undefined) body.issueId = input.issueId;
 
-    const created = await httpJson<TimeEntry>('POST', '/time-entries', body);
-    clearTimeEntryCache();
-    return created;
+    // Server-side write route invalidates the server cache (CR #29).
+    return httpJson<TimeEntry>('POST', '/time-entries', body);
   },
   async updateTimeEntry(id: number, patch: Partial<TimeEntry>): Promise<TimeEntry> {
     const body: Record<string, unknown> = {};
@@ -568,19 +492,15 @@ export const realRedmineApi: RedmineApi = {
     if (patch.projectId !== undefined) body.projectId = patch.projectId;
     if (patch.issueId !== undefined) body.issueId = patch.issueId;
 
-    const updated = await httpJson<TimeEntry>('PATCH', `/time-entries/${id}`, body);
-    clearTimeEntryCache();
-    return updated;
+    return httpJson<TimeEntry>('PATCH', `/time-entries/${id}`, body);
   },
   async deleteTimeEntry(id: number): Promise<{ id: number }> {
-    const result = await httpJson<{ id: number }>('DELETE', `/time-entries/${id}`);
-    clearTimeEntryCache();
-    return result;
+    return httpJson<{ id: number }>('DELETE', `/time-entries/${id}`);
   },
 
   async getUsers(): Promise<User[]> {
     try {
-      const res = await cachedGet<PaginatedWire<User>>('/users', { limit: 100 });
+      const res = await httpGet<PaginatedWire<User>>('/users', { limit: 100 });
       return res.items;
     } catch (err) {
       // /users.json is admin-only on most Redmine instances. Degrade
@@ -598,7 +518,7 @@ export const realRedmineApi: RedmineApi = {
       userName: string;
       roles: string[];
     }
-    const res = await cachedGet<PaginatedWire<MembershipWire>>(
+    const res = await httpGet<PaginatedWire<MembershipWire>>(
       `/projects/${projectId}/members`,
       { limit: 100 },
     );
@@ -632,7 +552,7 @@ export const realRedmineApi: RedmineApi = {
   async getWeeklyHours(userId?: number): Promise<{ logged: number; target: number }> {
     const from = startOfThisWeekIso();
     const to = todayIso();
-    const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', {
+    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
       user_id: userId === undefined ? 'me' : String(userId),
       from,
       to,
@@ -645,7 +565,7 @@ export const realRedmineApi: RedmineApi = {
   async getTeamHours(): Promise<{ logged: number; target: number }> {
     const from = startOfThisWeekIso();
     const to = todayIso();
-    const res = await cachedGet<PaginatedWire<TimeEntry>>('/time-entries', {
+    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
       from,
       to,
       limit: 100,
@@ -655,7 +575,7 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getResourceAllocations(projectId?: number): Promise<ResourceAllocation[]> {
-    const res = await cachedGet<{ items: GanttRow[]; total: number }>(
+    const res = await httpGet<{ items: GanttRow[]; total: number }>(
       '/gantt',
       projectId !== undefined ? { project_id: projectId } : undefined,
     );
@@ -667,7 +587,7 @@ export const realRedmineApi: RedmineApi = {
     issues: Issue[];
     allocations: ResourceAllocation[];
   }> {
-    const res = await cachedGet<{ items: GanttRow[]; total: number }>(
+    const res = await httpGet<{ items: GanttRow[]; total: number }>(
       '/gantt',
       projectId !== undefined ? { project_id: projectId } : undefined,
     );
