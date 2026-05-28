@@ -16,7 +16,11 @@ Status legend:
 
 ## #29 — Speed up Redmine API pulls (server-side cache, parallel pagination, prefetch)
 
-**Status:** 📝 Scaffold plan drafted (2026-05-28), awaiting approval
+**Status:** ✅ Shipped (2026-05-28)
+
+**Live numbers:** team gantt for project 127 — cold **5.05s** (was ~9s),
+warm **9.7–19.8ms** (>250× faster). After the warmer's initial pass,
+real users hit the cache on first load. See `CHANGELOG.md`.
 
 **Request:** The site is slow against live Redmine. The team **gantt** for
 project 127 takes ~9s / 295 KB (Dashboard "Team" tab and Hours "Show team"

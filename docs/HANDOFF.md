@@ -3,34 +3,23 @@
 Snapshot to continue this work in a fresh window. Repo:
 `C:\Users\nbraithwaite\redmine-ops-dashboard` (Windows).
 
-_Last updated: 2026-05-27._
+_Last updated: 2026-05-28._
 
 ## Where things stand
 
-- **On branch `azure-app`** with **uncommitted** Microsoft Entra sign-in work
-  (CR #28 — see below). Nothing for CR #28 is committed yet.
+- **On branch `azure-app`**, working tree clean. Local-only commits ahead of
+  `origin/azure-app` (CR #29 series — see below). Push when ready.
 - Branches:
   - `main` — the app (current features through CR #27). Pushed.
-  - `azure-app` — `main` + all features **+** single-Node Azure App Service
-    packaging. Pushed at `82a1bce` (MS-auth changes on top are uncommitted).
+  - `azure-app` — `main` + all features + single-Node Azure App Service
+    packaging + CR #28 (Entra sign-in) + CR #29 (Redmine perf).
   - `cr-17-19-dashboard-tabs-team-work` — old PR branch, can be deleted.
   - (Deleted earlier: `azure-enterprise-app`, `azure-single-node` → consolidated
     into `azure-app`.)
 
-## UNCOMMITTED right now (CR #28 — Microsoft Entra sign-in)
+## CR #28 — Microsoft Entra sign-in (shipped, flag-gated)
 
-Built, validated (typecheck/lint/build, 389 tests), and verified in-browser
-(disabled + enabled paths). **Flag-gated, off by default.** Files:
-
-- New: `server/src/routes/msAuth.ts`, `server/src/auth/msSessionStore.ts`,
-  `src/hooks/useMsAuth.ts`, `src/pages/MsSignIn.tsx`
-- Modified: `server/src/config.ts` (config.msAuth + MS_AUTH_ENABLED),
-  `server/src/index.ts` (mounts `/api/auth/ms` before `/api/auth`),
-  `src/App.tsx` (sign-in gate), `server/package.json` + `package-lock.json`
-  (`@azure/msal-node`), `.env.example`, `CHANGELOG.md`,
-  `docs/CHANGE_REQUESTS.md`, `docs/AZURE_APP_SETUP.md`
-
-**Next action:** commit + push to `azure-app` (the user was about to confirm).
+Shipped at `71bb9ed`. Off by default (`MS_AUTH_ENABLED=false`).
 
 ### How CR #28 works
 - Backend `/api/auth/ms/{signin,redirect,me,signout}` — MSAL Node auth-code +
@@ -53,13 +42,12 @@ Built, validated (typecheck/lint/build, 389 tests), and verified in-browser
 
 ## Backlog (open)
 
-- **CR #29 — Speed up Redmine API pulls** (📝 scaffold drafted). Server-side
-  TTL cache layered over `redmineFetch`, parallel pagination in the gantt
-  route, in-flight coalescing, boot-time prefetch + SWR for hot keys, and
-  shrink the redundant browser-side cache. Target: cold gantt ≤ ~5s (from
-  ~9s), warm ≤ 1s end-to-end. Unblocks the Dashboard "Team" tab and Hours
-  "Show team" slowness without waiting on the Phase D/E platform work. See
-  `docs/CHANGE_REQUESTS.md` #29.
+- **CR #29 — Speed up Redmine API pulls**: ✅ Shipped 2026-05-28. Cold gantt
+  **5.05s** (was ~9s), warm **<20ms**. Server-side TTL cache + SWR +
+  in-flight coalescing + parallel pagination + boot-time warmer for hot
+  keys. Browser cache ripped out (server is now authoritative);
+  `syncWithRedmine` POSTs `/api/admin/_cache/invalidate`. See
+  `docs/CHANGE_REQUESTS.md` #29 and `CHANGELOG.md`.
 - **CR #26 — TrackOpportunities CRM card** (Home card: 80–100% default
   probability filter, spring-up detail with aircraft/customer/topic +
   probability filters; 3D plane models later). **Blocked**: Dataverse
