@@ -21,7 +21,9 @@ import syncEventsRoute from './routes/syncEvents.js';
 import adminUsersRoute from './routes/admin/users.js';
 import adminPermissionsRoute from './routes/admin/permissions.js';
 import adminHistoryRoute from './routes/admin/history.js';
+import cacheRoute from './routes/_cache.js';
 import { session, requireSession } from './middleware/session.js';
+import { startWarmer } from './warmer.js';
 
 type Variables = {
   requestId: string;
@@ -85,6 +87,10 @@ admin.use('*', requireSession());
 admin.route('/users', adminUsersRoute);
 admin.route('/permissions', adminPermissionsRoute);
 admin.route('/history', adminHistoryRoute);
+// Cache control (CR #29). Admin-gated — only an authenticated admin session
+// can clear or inspect the server-side cache. Lives under /api/admin so the
+// readOnly middleware on /api/redmine doesn't block the POST.
+admin.route('/_cache', cacheRoute);
 app.route('/api/admin', admin);
 
 // ── Static frontend (single-process Azure App Service deploy) ──────────
@@ -100,6 +106,20 @@ serve({ fetch: app.fetch, port: config.port }, (info) => {
     `[server] listening on http://localhost:${info.port} ` +
       `(read-only=${config.readOnly}, origin=${config.allowedOrigin})`,
   );
+  if (config.cache.warmEnabled) {
+    startWarmer({
+      request: async (path) =>
+        app.fetch(new Request(`http://localhost:${info.port}${path}`)),
+      intervalMs: config.cache.warmIntervalMs,
+      onError: (taskName, err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[warmer] ${taskName} failed: ${msg}`);
+      },
+    });
+    console.log(
+      `[warmer] enabled (interval ${config.cache.warmIntervalMs}ms)`,
+    );
+  }
 });
 
 export type AppType = typeof app;

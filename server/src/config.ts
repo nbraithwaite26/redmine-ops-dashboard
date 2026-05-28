@@ -35,6 +35,12 @@ const schema = z.object({
   MSAL_CLIENT_SECRET: z.string().min(1).optional(),
   MSAL_REDIRECT_URI: z.string().url().optional(),
   MSAL_POST_LOGOUT_REDIRECT_URI: z.string().url().optional(),
+
+  // Cache warmer (CR #29). The warmer pre-fetches hot keys on boot and on
+  // an interval; disable for tests / dev where you don't want background
+  // upstream traffic.
+  CACHE_WARM_ENABLED: z.enum(['true', 'false']).default('true'),
+  CACHE_WARM_INTERVAL_MS: z.coerce.number().int().positive().default(5 * 60_000),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -77,6 +83,10 @@ export const config = {
     cookieSecure: env.COOKIE_SECURE === 'true',
   },
   redisUrl: env.REDIS_URL,
+  cache: {
+    warmEnabled: env.CACHE_WARM_ENABLED === 'true',
+    warmIntervalMs: env.CACHE_WARM_INTERVAL_MS,
+  },
   msAuth: {
     enabled: msAuthEnabled,
     clientId: env.MSAL_CLIENT_ID ?? '',
