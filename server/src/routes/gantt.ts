@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { redmineFetch } from '../redmineClient.js';
 import { adaptIssue } from '../adapters/issue.js';
 import { buildGanttRows } from '../adapters/gantt.js';
-import { getOrFetch } from '../cache.js';
+import { getOrFetch, keyFromParts } from '../cache.js';
 import { passthroughQuery } from './_helpers.js';
 import type { RedmineIssueDto } from '../types/redmineDto.js';
 
@@ -16,13 +16,6 @@ const CONCURRENCY = 4;
 
 const TTL_MS = 60_000;
 const STALE_MS = 5 * 60_000;
-
-function cacheKey(filters: Record<string, string>): string {
-  const parts = Object.entries(filters)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`);
-  return parts.length ? `gantt:${parts.join('&')}` : 'gantt:all';
-}
 
 async function withConcurrency<T, R>(
   items: T[],
@@ -75,7 +68,7 @@ gantt.get('/', async (c) => {
   );
 
   const payload = await getOrFetch(
-    cacheKey(filters),
+    keyFromParts('gantt', filters),
     TTL_MS,
     async () => {
       const collected: RedmineIssueDto[] = [];
