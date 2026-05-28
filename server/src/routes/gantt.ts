@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { redmineFetch } from '../redmineClient.js';
 import { adaptIssue } from '../adapters/issue.js';
 import { buildGanttRows } from '../adapters/gantt.js';
+import { getOrFetch } from '../cache.js';
 import { passthroughQuery } from './_helpers.js';
 import type { RedmineIssueDto } from '../types/redmineDto.js';
 
@@ -11,15 +12,61 @@ const FILTERS = ['project_id', 'assigned_to_id', 'status_id', 'tracker_id'] as c
 
 const PAGE = 100;
 const MAX_PAGES = 10; // safety cap (≈1000 issues); a Gantt past that is unusable
+const CONCURRENCY = 4;
+
+const TTL_MS = 60_000;
+const STALE_MS = 5 * 60_000;
+
+function cacheKey(filters: Record<string, string>): string {
+  const parts = Object.entries(filters)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`);
+  return parts.length ? `gantt:${parts.join('&')}` : 'gantt:all';
+}
+
+async function withConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i] as T, i);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+async function fetchPage(
+  offset: number,
+  filters: Record<string, string>,
+): Promise<{ issues: RedmineIssueDto[]; total_count: number }> {
+  return redmineFetch<{ issues: RedmineIssueDto[]; total_count: number }>(
+    '/issues.json',
+    {
+      query: { limit: PAGE, offset, include: 'relations', ...filters },
+    },
+  );
+}
 
 /**
  * Returns Gantt rows derived server-side from issues + relations. The plan
  * (§7.5) calls for one normalized array per row, with isOverloaded and
  * isAtRisk pre-computed.
  *
- * Pages through all matching issues (Redmine caps limit at 100). When a
- * `project_id` filter is supplied, Redmine includes the project's subprojects,
- * so passing a parent project id scopes the Gantt to that whole tree.
+ * Page 0 is fetched first to learn `total_count`. Remaining pages are then
+ * fetched **in parallel** with bounded concurrency, then derived rows are
+ * cached under a per-filter-set key with SWR (CR #29).
  */
 gantt.get('/', async (c) => {
   const filters = passthroughQuery(
@@ -27,21 +74,40 @@ gantt.get('/', async (c) => {
     FILTERS,
   );
 
-  const collected: RedmineIssueDto[] = [];
-  for (let page = 0; page < MAX_PAGES; page += 1) {
-    const raw = await redmineFetch<{ issues: RedmineIssueDto[]; total_count: number }>(
-      '/issues.json',
-      {
-        query: { limit: PAGE, offset: page * PAGE, include: 'relations', ...filters },
-      },
-    );
-    collected.push(...raw.issues);
-    if (raw.issues.length === 0 || collected.length >= raw.total_count) break;
-  }
+  const payload = await getOrFetch(
+    cacheKey(filters),
+    TTL_MS,
+    async () => {
+      const collected: RedmineIssueDto[] = [];
 
-  const issues = collected.map(adaptIssue);
-  const rows = buildGanttRows(issues);
-  return c.json({ items: rows, total: rows.length });
+      const first = await fetchPage(0, filters);
+      collected.push(...first.issues);
+
+      if (first.issues.length > 0 && collected.length < first.total_count) {
+        const totalPages = Math.min(
+          MAX_PAGES,
+          Math.ceil(first.total_count / PAGE),
+        );
+        const remainingOffsets: number[] = [];
+        for (let p = 1; p < totalPages; p += 1) {
+          remainingOffsets.push(p * PAGE);
+        }
+        const pages = await withConcurrency(
+          remainingOffsets,
+          CONCURRENCY,
+          (offset) => fetchPage(offset, filters),
+        );
+        for (const page of pages) collected.push(...page.issues);
+      }
+
+      const issues = collected.map(adaptIssue);
+      const rows = buildGanttRows(issues);
+      return { items: rows, total: rows.length };
+    },
+    { staleMs: STALE_MS },
+  );
+
+  return c.json(payload);
 });
 
 export default gantt;
