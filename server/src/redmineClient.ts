@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { getOrFetch } from './cache.js';
 
 /**
  * Thin typed wrapper around fetch() for Redmine REST. Injects the API key
@@ -15,6 +16,18 @@ export interface RedmineRequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
   timeoutMs?: number;
+  /**
+   * Opt this call into the shared server-side TTL cache (CR #29). Only GET
+   * requests are cached; the option is ignored for non-GET methods.
+   *
+   * `key` should be a stable identifier for the (path, filters) tuple — by
+   * convention `<route>:<sorted-filters>` (e.g. `gantt:project_id=127`).
+   */
+  cache?: {
+    key: string;
+    ttlMs: number;
+    staleMs?: number;
+  };
 }
 
 export class RedmineHttpError extends Error {
@@ -41,11 +54,13 @@ function buildUrl(path: string, query?: RedmineRequestOptions['query']): string 
   return url.toString();
 }
 
-export async function redmineFetch<T>(
+async function doRedmineFetch<T>(
   path: string,
-  options: RedmineRequestOptions = {},
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  query: RedmineRequestOptions['query'],
+  body: unknown,
+  timeoutMs: number,
 ): Promise<T> {
-  const { method = 'GET', query, body, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const url = buildUrl(path, query);
 
   const controller = new AbortController();
@@ -85,4 +100,28 @@ export async function redmineFetch<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function redmineFetch<T>(
+  path: string,
+  options: RedmineRequestOptions = {},
+): Promise<T> {
+  const {
+    method = 'GET',
+    query,
+    body,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    cache,
+  } = options;
+
+  if (cache && method === 'GET') {
+    return getOrFetch(
+      cache.key,
+      cache.ttlMs,
+      () => doRedmineFetch<T>(path, method, query, body, timeoutMs),
+      cache.staleMs !== undefined ? { staleMs: cache.staleMs } : {},
+    );
+  }
+
+  return doRedmineFetch<T>(path, method, query, body, timeoutMs);
 }
