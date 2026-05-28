@@ -448,13 +448,29 @@ export const realRedmineApi: RedmineApi = {
     // Backend honors from / to / user_id / issue_id as passthrough query
     // params (see server/src/routes/timeEntries.ts LIST_FILTERS). The server
     // cache (CR #29) keys list responses by filter set.
-    const query: Record<string, string | number> = { limit: 100 };
-    if (opts.from) query.from = opts.from;
-    if (opts.to) query.to = opts.to;
-    if (opts.userId !== undefined) query.user_id = opts.userId;
-    if (opts.issueId !== undefined) query.issue_id = opts.issueId;
-    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', query);
-    return res.items;
+    //
+    // Pages through all results — Redmine caps `limit` at 100, and a busy
+    // week can easily exceed that. Pre-pagination, the team-hours card on
+    // the Dashboard silently undercounted for any week with >100 entries.
+    const PAGE = 100;
+    const MAX_PAGES = 20; // safety cap (≈2000 entries)
+    const baseQuery: Record<string, string | number> = {};
+    if (opts.from) baseQuery.from = opts.from;
+    if (opts.to) baseQuery.to = opts.to;
+    if (opts.userId !== undefined) baseQuery.user_id = opts.userId;
+    if (opts.issueId !== undefined) baseQuery.issue_id = opts.issueId;
+
+    const collected: TimeEntry[] = [];
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
+        ...baseQuery,
+        limit: PAGE,
+        offset: page * PAGE,
+      });
+      collected.push(...res.items);
+      if (res.items.length === 0 || collected.length >= res.total) break;
+    }
+    return collected;
   },
 
   async createTimeEntry(input: Partial<TimeEntry>): Promise<TimeEntry> {
