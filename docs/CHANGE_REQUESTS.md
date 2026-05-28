@@ -14,6 +14,162 @@ Status legend:
 
 ---
 
+## #29 — Speed up Redmine API pulls (server-side cache, parallel pagination, prefetch)
+
+**Status:** 📝 Scaffold plan drafted (2026-05-28), awaiting approval
+
+**Request:** The site is slow against live Redmine. The team **gantt** for
+project 127 takes ~9s / 295 KB (Dashboard "Team" tab and Hours "Show team"
+trigger it); other calls land at 1–3s. Each fresh tab / hard reload pays the
+full cost because today's TTL cache lives in the **browser**
+(`src/services/realRedmineApi.ts`) — the server (`redmineClient.ts`,
+`routes/gantt.ts`) has no cache and walks pagination sequentially. Make the
+common reads feel instant without waiting on the Phase D/E platform work.
+
+**Why now:** no existing CR addresses this; HANDOFF flags it as a live-mode
+pain point; the deferred Redis/SSE plan in ROADMAP "Later" phases solves the
+same problem but is gated behind Entra SSO (Phase A) and isn't shipping soon.
+This CR is the in-place version that runs on today's architecture.
+
+**Proposed scope:**
+
+1. **Server-side TTL cache layered over `redmineFetch`.** New
+   `server/src/cache.ts` (in-memory `Map<key, { data, fetchedAt }>`, single
+   process — Redis later per Phase D). Key = method + path + sorted query.
+   Default TTLs: 60s lists, 10s issue detail; per-route overrides via the
+   call site. Honors `Cache-Control: no-cache` from the proxy for force-refresh.
+   **Mock mode uses the same cache** (per CR #29 Q5) so tests exercise the
+   full cache path; `resetCache()` runs in `server/test/setup.ts` between tests.
+2. **In-flight coalescing.** If a second request for the same key arrives
+   while the first is pending, both await the same promise — no duplicate
+   upstream calls when 3 browsers hit `/api/redmine/gantt?project_id=127`
+   together.
+3. **Parallel pagination in `routes/gantt.ts`.** Today the page loop is
+   sequential (`for page = 0..MAX_PAGES`). After the first page returns
+   `total_count`, fan out the remaining pages with bounded concurrency
+   (e.g. 4 in flight). For a 295 KB / ~7-page payload this is the biggest
+   single win on the cold path.
+4. **Cache the derived Gantt rows**, not just the upstream `/issues.json`
+   pages. `buildGanttRows()` is pure of the issues array — store the final
+   `{ items, total }` under a per-filter-set key with a 60s TTL.
+5. **Prefetch / warm on boot for the hot keys.** Three warm tasks (decided
+   2026-05-28): (a) **team gantt for project 127**; (b) **full projects
+   list, paginated to `total_count`** — no `limit=100` cap (one page from
+   Redmine is fine when the count fits; otherwise the warmer walks pages
+   the same way the gantt route does); (c) **the top-level `/issues` lists
+   the Dashboard renders** (personal "Your Work" + team "Team's Work"
+   queries). Metadata is **not** warmed — it's cached on first hit but
+   doesn't justify a background refresh. On server start and on a
+   configurable interval, fire those requests in the background so the
+   first user hit is a cache hit. Failures log and back off; they never
+   block startup.
+6. **`stale-while-revalidate` semantics for warmed keys.** If a request lands
+   on an entry past its TTL but within a `staleMs` window, return stale
+   immediately and kick off a background refresh. Keeps perceived latency
+   flat even when the warmer hasn't run recently.
+7. **Frontend follow-through.** Drop the frontend TTL cache to a much
+   shorter window (or remove the list-level cache entirely) once the
+   server-side cache is authoritative — single source of truth for staleness.
+   `syncWithRedmine()` calls a new `POST /api/redmine/_cache/invalidate`
+   instead of just clearing the browser map.
+
+**Out of scope (deferred to Phase D/E):**
+- Redis-backed cache (single-process Map is fine on the single Azure App
+  Service instance we're deploying to).
+- SSE push of refresh events to connected browsers (clients can poll the
+  cheap, now-warm endpoint).
+- Per-user cache partitioning (single shared Redmine key today, so all
+  cached payloads are tenant-wide — fine until Phase B).
+
+**Acceptance:**
+- Cold load of Dashboard "Team" tab on a fresh server: ≤ ~5s (parallel
+  pagination should roughly halve the 9s).
+- Warm load (within TTL, after prefetch has run): ≤ 500ms server side,
+  observed end-to-end ≤ 1s.
+- `npm test` green; new server tests cover cache hit/miss, in-flight
+  coalescing, parallel pagination ordering, and the invalidate route.
+- No regression in `REDMINE_READ_ONLY=true` behavior or in mock mode.
+- Logs still redact keys/bodies (cache layer must not log request bodies).
+
+### Scaffold plan
+
+**New files**
+| Path | Purpose |
+| --- | --- |
+| `server/src/cache.ts` | Generic in-memory TTL cache with in-flight coalescing + SWR. Exports `getOrFetch<T>(key, ttlMs, fetcher, opts?)`, `invalidate(prefix?)`, `stats()`. Bounded LRU (cap ~500 entries). No body/key logging. |
+| `server/src/warmer.ts` | Boot-time + interval prefetch driver. Reads a static list of warm tasks (functions, not strings — keeps it type-safe), runs them on start with `Promise.allSettled`, then re-runs every `CACHE_WARM_INTERVAL_MS`. Backs off on `429`/`5xx`. |
+| `server/src/routes/_cache.ts` | Tiny route group mounted at `/api/redmine/_cache`. `POST /invalidate` (admin or session-gated) clears the server cache; `GET /stats` returns hit/miss counts for debugging. |
+| `server/test/cache.test.ts` | Unit tests: hit, miss, expiry, in-flight coalescing (one upstream call for N parallel callers), SWR (stale return + background refresh), LRU eviction. |
+| `server/test/warmer.test.ts` | Warmer runs all tasks on boot; failure of one doesn't kill the others; interval re-runs them; backoff after upstream `5xx`. |
+| `server/test/routes.cache.test.ts` | `POST /_cache/invalidate` clears the map; `GET /_cache/stats` shape. |
+
+**Modified files**
+| Path | Change |
+| --- | --- |
+| `server/src/redmineClient.ts` | Add an optional `cache?: { key: string; ttlMs: number; staleMs?: number }` field to `RedmineRequestOptions`. When present, route the call through `cache.getOrFetch`. Default behavior unchanged when omitted. |
+| `server/src/routes/gantt.ts` | (a) Fetch page 0 to learn `total_count`. (b) Spawn the remaining pages with `Promise.all` and a bounded-concurrency helper (cap 4 in flight; sequential fallback if `total_count` is missing). (c) Cache the **derived** `{ items, total }` payload under key `gantt:<sorted-filters>` with `ttlMs=60_000`, `staleMs=5*60_000`. |
+| `server/src/routes/issues.ts`, `routes/metadata.ts`, `routes/timeEntries.ts`, `routes/users.ts`, `routes/me.ts` | Opt each GET into the cache by passing `cache: { key, ttlMs }` to `redmineFetch`. TTLs: 60s lists, 10s detail, 5min metadata. Writes call `cache.invalidate('issues:*')` + `cache.invalidate('gantt:*')` / `'time-entries:*'` after success — replaces the frontend's `invalidateIssueCaches` pattern. |
+| `server/src/routes/projects.ts` | Same cache opt-in, **plus paginate-to-`total_count`** (mirroring `gantt.ts`'s loop) for the warmed full-projects list — needed because the warmer is configured to walk all pages, not cap at `limit=100`. |
+| `server/src/index.ts` | Mount `_cache` route group under `/api/redmine/_cache` (inside the readOnly group is fine — invalidate is POST but is internal). Start the warmer after `serve()` reports listening. |
+| `server/src/config.ts` | Add `CACHE_ENABLED` (default `true`), `CACHE_WARM_INTERVAL_MS` (default `300_000`), `CACHE_LIST_TTL_MS` (default `60_000`), `CACHE_DETAIL_TTL_MS` (default `10_000`), `CACHE_SWR_MS` (default `300_000`). Expose as `config.cache.*`. |
+| `src/services/realRedmineApi.ts` | Drop the list-endpoint TTL cache (lines ~164–230). Keep the metadata coordinator (still useful for browser-side dedup within a single page render). Update `syncWithRedmine()` to `POST /api/redmine/_cache/invalidate` then re-fetch active page. Update `invalidateIssueCaches` / `invalidateTimeEntryCaches` to either remove or no-op (writes now invalidate server-side). |
+| `src/services/http.ts` | Add a `force?: boolean` option that sends `Cache-Control: no-cache`; server treats it as "bypass cache for this call." Used by `syncWithRedmine` and any explicit refresh button. |
+| `.env.example` | Document the new `CACHE_*` vars. |
+| `CHANGELOG.md` | One-line entry under "Unreleased". |
+| `docs/ARCHITECTURE.md` | Update §7.4 "TTL cache" — move authoritative cache from frontend to server. Add a paragraph on the warmer + SWR. |
+| `docs/API.md` | Document `POST /api/redmine/_cache/invalidate` and `GET /api/redmine/_cache/stats`. Note which GET routes are cached + per-route TTL. |
+| `docs/IMPLEMENTATION_STATUS.md` | Add a row for CR #29. Update the row referencing CR #9 (was "cache in `realRedmineApi.ts`") to point at the server. |
+
+**New utilities / types**
+- `withConcurrency<T>(items, limit, mapper)` in `server/src/cache.ts` (or a small `concurrency.ts` if it grows) — bounded `Promise.all` for the gantt page fan-out.
+- `CacheEntry<T>`, `CacheStats` types in `server/src/cache.ts`.
+
+**Dependencies between changes (order matters)**
+1. `cache.ts` lands first (pure, fully unit-tested) — nothing imports it yet.
+2. `redmineClient.ts` learns the optional `cache` field. Existing call sites unchanged; tests stay green.
+3. Gantt route gets parallel pagination + derived-row cache. This alone unlocks the headline perf win and is independently testable / revertible.
+4. Other GET routes opt in. One commit per route group keeps blast radius small.
+5. Write routes wire up cache invalidation.
+6. `_cache` route + warmer + boot wiring.
+7. Frontend cleanup (drop browser-side list cache, route sync through new endpoint).
+
+**Test impact**
+- **New:** `cache.test.ts`, `warmer.test.ts`, `routes.cache.test.ts`, plus a new case in `routes.gantt.test.ts` asserting (a) parallel fan-out — second page requested before first page response is consumed (use a deferred-promise fixture), and (b) cache hit returns no `fetch` calls.
+- **Updated:** existing `routes.issues.test.ts`, `routes.timeEntries.test.ts`, etc. need `cache.invalidate('*')` between tests so cross-test bleed doesn't show up. Add a shared `resetCache()` to `server/test/setup.ts`.
+- **Frontend:** any test that asserted browser-side cache state in `realRedmineApi` needs to be deleted or rewritten against the new shape. Audit during step 7.
+
+**Commit sequence**
+1. `feat(server): in-memory cache with TTL, SWR, in-flight coalescing` — `cache.ts` + `cache.test.ts` only. No call sites yet.
+2. `feat(server): plumb optional cache into redmineFetch` — `redmineClient.ts` accepts the new option; no callers use it yet. Tests stay green.
+3. `perf(gantt): parallel pagination + cache derived rows` — the headline change. Gantt route + new test fixture. **Stop and measure** before continuing.
+4. `perf(server): cache hot GET routes (issues, projects, metadata, time-entries, users, me)` — one route group at a time if reviewers prefer; otherwise one bundled commit.
+5. `feat(server): invalidate cache on writes` — write routes call `cache.invalidate(prefix)`.
+6. `feat(server): /_cache invalidate + stats routes` + boot-time + interval warmer.
+7. `refactor(client): drop browser list cache; sync via /_cache/invalidate` — frontend cleanup.
+8. `docs(cr-29): update ARCHITECTURE, API, IMPLEMENTATION_STATUS, CHANGELOG` — flip CR status to ✅ with measured numbers.
+
+**Decisions locked (2026-05-28)**
+- **Warm-task list.** Team gantt `project_id=127`; **full projects list,
+  paginated to `total_count`** (no `limit=100` cap); top-level Dashboard
+  `/issues` queries (personal + team). Metadata excluded.
+- **Invalidate auth.** `POST /_cache/invalidate` is **session-gated, admin
+  only**. The sync button force-refreshes by sending `Cache-Control:
+  no-cache` on its read instead of calling the invalidate route.
+- **Write invalidation scope.** Writes invalidate **all `issues:*` + `gantt:*`
+  keys** (the simple, slightly over-eager version) — no filter-set parsing.
+- **Frontend cache.** **Rip out** the list/detail TTL maps in
+  `realRedmineApi.ts`. Keep the metadata coordinator (in-render dedup).
+- **Mock mode.** Same TTL behavior as real mode — tests exercise the full
+  cache path. Requires `resetCache()` in `server/test/setup.ts`.
+
+**Risks + mitigations**
+- Stale data after a write → server-side `cache.invalidate(prefix)` in every write route. Covered by tests.
+- Memory growth → bounded LRU (~500 keys) + per-entry serialized-size guard; reject entries > 1 MB (logged, not cached).
+- Warmer hammering Redmine if misconfigured → default interval 5 min; exponential backoff to 15 min after a `429`/`5xx`; never blocks startup.
+- Process restart wipes the cache (single-process Map). Acceptable for now; Phase D moves to Redis.
+
+---
+
 ## #27 — Clickable project cards → spring-up task list
 
 **Status:** ✅ Shipped (2026-05-27)
