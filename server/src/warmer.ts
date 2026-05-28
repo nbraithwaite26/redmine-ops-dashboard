@@ -30,12 +30,17 @@ const PAGE_CONCURRENCY = 4;
  * with bounded concurrency so a single warm cycle finishes in
  * ~ceil(pages/4) upstream round-trips instead of `pages`.
  */
+function withPagedQuery(basePath: string, offset: number): string {
+  const sep = basePath.includes('?') ? '&' : '?';
+  return `${basePath}${sep}limit=100&offset=${offset}`;
+}
+
 async function warmAllPages(
   request: WarmRequest,
   basePath: string,
-  maxPages = 20,
+  maxPages = 50,
 ): Promise<void> {
-  const first = await request(`${basePath}?limit=100&offset=0`);
+  const first = await request(withPagedQuery(basePath, 0));
   if (!first.ok) return;
   const body = (await first.json()) as { total?: number };
   const total = typeof body.total === 'number' ? body.total : 0;
@@ -51,7 +56,7 @@ async function warmAllPages(
       cursor += 1;
       if (i >= offsets.length) return;
       const offset = offsets[i] as number;
-      await request(`${basePath}?limit=100&offset=${offset}`).catch(() => undefined);
+      await request(withPagedQuery(basePath, offset)).catch(() => undefined);
     }
   }
   await Promise.all(
@@ -77,6 +82,9 @@ function startOfThisWeekIso(): string {
  * src/services/realRedmineApi.ts). Dates are computed at warm time so they
  * stay current; the user id is read from /me and passed through verbatim
  * the same way useCurrentUser hydrates it on the frontend.
+ *
+ * Lists that can exceed 100 are walked via warmAllPages — the frontend
+ * paginates all of them, so we have to warm every page they'll request.
  */
 async function warmDashboardKeys(request: WarmRequest): Promise<void> {
   // Hit /me first to learn the current user id (same call the frontend
@@ -89,20 +97,35 @@ async function warmDashboardKeys(request: WarmRequest): Promise<void> {
   const today = todayIso();
   const weekStart = startOfThisWeekIso();
 
-  const paths: string[] = [
-    `/api/redmine/issues?limit=100`,
-    `/api/redmine/issues?due_date=%3C%3D${today}&status_id=open&limit=100`,
-    `/api/redmine/time-entries?from=${weekStart}&to=${today}&limit=100`,
-    `/api/redmine/metadata`,
+  // High-volume lists: walk every page so a 3766-issue cold load doesn't
+  // bite the first visitor. warmAllPages already uses bounded concurrency.
+  const heavy: Promise<unknown>[] = [
+    warmAllPages(request, '/api/redmine/issues'),
+    warmAllPages(
+      request,
+      `/api/redmine/issues?due_date=%3C%3D${today}&status_id=open`,
+    ),
+    warmAllPages(
+      request,
+      `/api/redmine/time-entries?from=${weekStart}&to=${today}`,
+    ),
   ];
+
+  // Light/single-page keys.
+  const light: Promise<unknown>[] = [request('/api/redmine/metadata').catch(() => undefined)];
   if (userId !== null) {
-    paths.push(`/api/redmine/issues?assigned_to_id=${userId}&limit=100`);
-    paths.push(
-      `/api/redmine/time-entries?user_id=${userId}&from=${weekStart}&to=${today}&limit=100`,
+    light.push(
+      warmAllPages(request, `/api/redmine/issues?assigned_to_id=${userId}`),
+    );
+    light.push(
+      warmAllPages(
+        request,
+        `/api/redmine/time-entries?user_id=${userId}&from=${weekStart}&to=${today}`,
+      ),
     );
   }
 
-  await Promise.all(paths.map((p) => request(p).catch(() => undefined)));
+  await Promise.all([...heavy, ...light]);
 }
 
 export const DEFAULT_WARM_TASKS: WarmTask[] = [

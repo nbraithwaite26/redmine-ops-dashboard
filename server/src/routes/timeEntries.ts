@@ -13,6 +13,7 @@ import type { AppEnv } from '../types/appVars.js';
 const timeEntries = new Hono<AppEnv>();
 
 const LIST_TTL_MS = 60_000;
+const LIST_STALE_MS = 10 * 60_000;
 
 const LIST_FILTERS = [
   'user_id',
@@ -45,6 +46,7 @@ timeEntries.get('/', async (c) => {
         ...filters,
       }),
       ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
     },
   });
 

@@ -173,6 +173,35 @@ async function invalidateServerCache(): Promise<void> {
   }
 }
 
+/**
+ * Walks every page of a paginated list endpoint and concatenates the
+ * results. Redmine caps `limit` at 100, so any call hard-coded to a single
+ * page silently undercounts once the data set crosses 100 (this bit the
+ * Dashboard's team-hours card for any week with >100 entries). Use this
+ * for every "give me all of X for this filter" facade method.
+ *
+ * `maxPages` is a safety cap to keep a runaway upstream `total_count`
+ * from spinning forever; default 20 covers ~2000 items.
+ */
+async function paginateAll<T>(
+  path: string,
+  baseQuery: Record<string, string | number> = {},
+  maxPages = 50,
+): Promise<T[]> {
+  const PAGE = 100;
+  const collected: T[] = [];
+  for (let page = 0; page < maxPages; page += 1) {
+    const res = await httpGet<PaginatedWire<T>>(path, {
+      ...baseQuery,
+      limit: PAGE,
+      offset: page * PAGE,
+    });
+    collected.push(...res.items);
+    if (res.items.length === 0 || collected.length >= res.total) break;
+  }
+  return collected;
+}
+
 // ─── Connection / config (UI-side, localStorage) ─────────────────────────
 
 const CONNECTION_SETTINGS_KEY = 'redmine-ops:connection-settings';
@@ -288,20 +317,11 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getProjects(): Promise<Project[]> {
-    // Page through all projects (Redmine caps limit at 100). The project
-    // tree on the Projects page needs the full list, not just the first page.
-    const PAGE = 100;
-    const MAX_PAGES = 50; // safety cap (≈5000 projects)
-    const collected: ProjectDetailWire[] = [];
-    for (let page = 0; page < MAX_PAGES; page += 1) {
-      const res = await httpGet<PaginatedWire<ProjectDetailWire>>('/projects', {
-        limit: PAGE,
-        offset: page * PAGE,
-      });
-      collected.push(...res.items);
-      if (res.items.length === 0 || collected.length >= res.total) break;
-    }
-    return collected.map((p) => ({
+    // The project tree on the Projects page needs the full list, not just
+    // the first page. 50-page cap (≈5000 projects) since project sets can
+    // be larger than the default 20-page cap on issue/time-entry queries.
+    const items = await paginateAll<ProjectDetailWire>('/projects', {}, 50);
+    return items.map((p) => ({
       id: p.id,
       name: p.name,
       identifier: p.identifier,
@@ -322,35 +342,24 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getIssues(): Promise<Issue[]> {
-    const res = await httpGet<PaginatedWire<Issue>>('/issues', { limit: 100 });
-    return res.items;
+    return paginateAll<Issue>('/issues');
   },
 
   async getIssuesByProject(projectId: number): Promise<Issue[]> {
-    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
-      project_id: projectId,
-      limit: 100,
-    });
-    return res.items;
+    return paginateAll<Issue>('/issues', { project_id: projectId });
   },
 
   async getMyIssues(userId?: number): Promise<Issue[]> {
     const assignedTo = userId === undefined ? 'me' : String(userId);
-    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
-      assigned_to_id: assignedTo,
-      limit: 100,
-    });
-    return res.items;
+    return paginateAll<Issue>('/issues', { assigned_to_id: assignedTo });
   },
 
   async getPastDueIssues(today?: Date): Promise<Issue[]> {
     const cutoff = (today ?? new Date()).toISOString().slice(0, 10);
-    const res = await httpGet<PaginatedWire<Issue>>('/issues', {
+    return paginateAll<Issue>('/issues', {
       due_date: `<=${cutoff}`,
       status_id: 'open',
-      limit: 100,
     });
-    return res.items;
   },
 
   async getIssueById(id: number): Promise<Issue | null> {
@@ -448,29 +457,12 @@ export const realRedmineApi: RedmineApi = {
     // Backend honors from / to / user_id / issue_id as passthrough query
     // params (see server/src/routes/timeEntries.ts LIST_FILTERS). The server
     // cache (CR #29) keys list responses by filter set.
-    //
-    // Pages through all results — Redmine caps `limit` at 100, and a busy
-    // week can easily exceed that. Pre-pagination, the team-hours card on
-    // the Dashboard silently undercounted for any week with >100 entries.
-    const PAGE = 100;
-    const MAX_PAGES = 20; // safety cap (≈2000 entries)
     const baseQuery: Record<string, string | number> = {};
     if (opts.from) baseQuery.from = opts.from;
     if (opts.to) baseQuery.to = opts.to;
     if (opts.userId !== undefined) baseQuery.user_id = opts.userId;
     if (opts.issueId !== undefined) baseQuery.issue_id = opts.issueId;
-
-    const collected: TimeEntry[] = [];
-    for (let page = 0; page < MAX_PAGES; page += 1) {
-      const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
-        ...baseQuery,
-        limit: PAGE,
-        offset: page * PAGE,
-      });
-      collected.push(...res.items);
-      if (res.items.length === 0 || collected.length >= res.total) break;
-    }
-    return collected;
+    return paginateAll<TimeEntry>('/time-entries', baseQuery);
   },
 
   async createTimeEntry(input: Partial<TimeEntry>): Promise<TimeEntry> {
@@ -516,8 +508,7 @@ export const realRedmineApi: RedmineApi = {
 
   async getUsers(): Promise<User[]> {
     try {
-      const res = await httpGet<PaginatedWire<User>>('/users', { limit: 100 });
-      return res.items;
+      return await paginateAll<User>('/users');
     } catch (err) {
       // /users.json is admin-only on most Redmine instances. Degrade
       // gracefully — callers get an empty list rather than a 403 toast.
@@ -534,11 +525,10 @@ export const realRedmineApi: RedmineApi = {
       userName: string;
       roles: string[];
     }
-    const res = await httpGet<PaginatedWire<MembershipWire>>(
+    const items = await paginateAll<MembershipWire>(
       `/projects/${projectId}/members`,
-      { limit: 100 },
     );
-    return res.items.map<User>((m) => ({
+    return items.map<User>((m) => ({
       id: m.userId,
       name: m.userName,
       email: '',
@@ -568,25 +558,20 @@ export const realRedmineApi: RedmineApi = {
   async getWeeklyHours(userId?: number): Promise<{ logged: number; target: number }> {
     const from = startOfThisWeekIso();
     const to = todayIso();
-    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
+    const items = await paginateAll<TimeEntry>('/time-entries', {
       user_id: userId === undefined ? 'me' : String(userId),
       from,
       to,
-      limit: 100,
     });
-    const logged = res.items.reduce((sum, e) => sum + e.hours, 0);
+    const logged = items.reduce((sum, e) => sum + e.hours, 0);
     return { logged, target: 40 };
   },
 
   async getTeamHours(): Promise<{ logged: number; target: number }> {
     const from = startOfThisWeekIso();
     const to = todayIso();
-    const res = await httpGet<PaginatedWire<TimeEntry>>('/time-entries', {
-      from,
-      to,
-      limit: 100,
-    });
-    const logged = res.items.reduce((sum, e) => sum + e.hours, 0);
+    const items = await paginateAll<TimeEntry>('/time-entries', { from, to });
+    const logged = items.reduce((sum, e) => sum + e.hours, 0);
     return { logged, target: 360 };
   },
 
