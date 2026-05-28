@@ -18,6 +18,8 @@ process.env.ADMIN_PASSWORD_HASH =
 process.env.SESSION_SECRET = 'test-session-secret-at-least-32-bytes-long';
 process.env.HISTORY_DB = './server/test/.tmp-history.jsonl';
 process.env.COOKIE_SECURE = 'false';
+// CR #29: the warmer would otherwise auto-fire upstream calls during tests.
+process.env.CACHE_WARM_ENABLED = 'false';
 
 // The server-side cache (CR #29) is module-level singleton state. Clear it
 // before every test so suites that exercise cached routes don't bleed into

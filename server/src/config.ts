@@ -24,6 +24,12 @@ const schema = z.object({
   // process-local maps to Redis so they survive restarts and shard across
   // backend instances. Plan §13.
   REDIS_URL: z.string().url().optional(),
+
+  // Cache warmer (CR #29). The warmer pre-fetches hot keys on boot and on
+  // an interval; disable for tests / dev where you don't want background
+  // upstream traffic.
+  CACHE_WARM_ENABLED: z.enum(['true', 'false']).default('true'),
+  CACHE_WARM_INTERVAL_MS: z.coerce.number().int().positive().default(5 * 60_000),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -58,6 +64,10 @@ export const config = {
     cookieSecure: env.COOKIE_SECURE === 'true',
   },
   redisUrl: env.REDIS_URL,
+  cache: {
+    warmEnabled: env.CACHE_WARM_ENABLED === 'true',
+    warmIntervalMs: env.CACHE_WARM_INTERVAL_MS,
+  },
 } as const;
 
 export type AppConfig = typeof config;
