@@ -22,11 +22,13 @@ const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MAX_BACKOFF_MS = 15 * 60_000;
 const BACKOFF_START_MS = 60_000;
 
+const PAGE_CONCURRENCY = 4;
+
 /**
- * Walks all pages of a paginated list endpoint (limit=100). Reads
- * total_count from page 0, then fires the remaining offsets in sequence
- * — sequential is fine because each call is cheap once the upstream is
- * also cached by Redmine itself, and bunching here keeps load smooth.
+ * Walks all pages of a paginated list endpoint (limit=100) in parallel.
+ * Reads total_count from page 0 first, then fires the remaining offsets
+ * with bounded concurrency so a single warm cycle finishes in
+ * ~ceil(pages/4) upstream round-trips instead of `pages`.
  */
 async function warmAllPages(
   request: WarmRequest,
@@ -39,10 +41,68 @@ async function warmAllPages(
   const total = typeof body.total === 'number' ? body.total : 0;
   if (total <= 100) return;
   const pages = Math.min(maxPages, Math.ceil(total / 100));
-  for (let p = 1; p < pages; p += 1) {
-    const res = await request(`${basePath}?limit=100&offset=${p * 100}`);
-    if (!res.ok) return; // bail on first failure; next cycle will retry
+  const offsets: number[] = [];
+  for (let p = 1; p < pages; p += 1) offsets.push(p * 100);
+
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= offsets.length) return;
+      const offset = offsets[i] as number;
+      await request(`${basePath}?limit=100&offset=${offset}`).catch(() => undefined);
+    }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(PAGE_CONCURRENCY, offsets.length) }, () => worker()),
+  );
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function startOfThisWeekIso(): string {
+  const today = new Date();
+  const day = today.getDay(); // 0 = Sunday
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  return monday.toISOString().slice(0, 10);
+}
+
+/**
+ * Mirrors the URL shapes the Dashboard hits on first load (see
+ * src/services/realRedmineApi.ts). Dates are computed at warm time so they
+ * stay current; the user id is read from /me and passed through verbatim
+ * the same way useCurrentUser hydrates it on the frontend.
+ */
+async function warmDashboardKeys(request: WarmRequest): Promise<void> {
+  // Hit /me first to learn the current user id (same call the frontend
+  // makes via useCurrentUser; serves cached after the first time).
+  const meRes = await request('/api/redmine/me');
+  if (!meRes.ok) return;
+  const me = (await meRes.json()) as { id?: number };
+  const userId = typeof me.id === 'number' ? me.id : null;
+
+  const today = todayIso();
+  const weekStart = startOfThisWeekIso();
+
+  const paths: string[] = [
+    `/api/redmine/issues?limit=100`,
+    `/api/redmine/issues?due_date=%3C%3D${today}&status_id=open&limit=100`,
+    `/api/redmine/time-entries?from=${weekStart}&to=${today}&limit=100`,
+    `/api/redmine/metadata`,
+  ];
+  if (userId !== null) {
+    paths.push(`/api/redmine/issues?assigned_to_id=${userId}&limit=100`);
+    paths.push(
+      `/api/redmine/time-entries?user_id=${userId}&from=${weekStart}&to=${today}&limit=100`,
+    );
+  }
+
+  await Promise.all(paths.map((p) => request(p).catch(() => undefined)));
 }
 
 export const DEFAULT_WARM_TASKS: WarmTask[] = [
@@ -57,6 +117,10 @@ export const DEFAULT_WARM_TASKS: WarmTask[] = [
     run: async (request) => {
       await warmAllPages(request, '/api/redmine/projects');
     },
+  },
+  {
+    name: 'dashboard:hot-keys',
+    run: warmDashboardKeys,
   },
 ];
 
