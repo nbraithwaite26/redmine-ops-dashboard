@@ -10,7 +10,6 @@ import type { Issue } from '../types/redmine';
 import {
   getIssues,
   getPastDueIssues,
-  getTimeEntries,
   getTimeOff,
 } from '../services/redmineApi';
 import { buildTeamMetrics } from '../data/mockData';
@@ -54,18 +53,15 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Team hours logged in the selected week = sum of all time entries in range.
+  // Team-hours total is computed by TeamWorkPanel and lifted up here, so
+  // the metric scopes to the same engineers visible in the picker.
+  // The team-hours useEffect that summed every entry was removed: it was
+  // counting people who weren't on this page's team (sshrestha, grios,
+  // lsanford, enorde, …), which mis-stated the "team hours" total.
+  // Reset to 0 when the week changes so we don't briefly show a stale
+  // number from the previous week while TeamWorkPanel re-aggregates.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const entries = await getTimeEntries({ from: range.from, to: range.to });
-      if (cancelled) return;
-      const total = entries.reduce((sum, e) => sum + e.hours, 0);
-      setTeamLogged(Math.round(total * 10) / 10);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setTeamLogged(0);
   }, [range.from, range.to]);
 
   // Engineers out in the selected week (drives the Engineers-out card).
@@ -144,7 +140,11 @@ export default function Dashboard() {
               ),
             )}
           </div>
-          <TeamWorkPanel week={week} onWeekChange={setWeek} />
+          <TeamWorkPanel
+            week={week}
+            onWeekChange={setWeek}
+            onSelectedHoursChange={setTeamLogged}
+          />
 
           <AnimatePresence>
             {timeOffOpen && <TimeOffDetail onClose={() => setTimeOffOpen(false)} />}
