@@ -22,12 +22,18 @@ export const DEFAULT_TEAM_FIRST_NAMES = [
  * the user. The selector lets anyone change the set, and the choice persists.
  */
 export const DEFAULT_TEAM_LOGINS = [
-  'afreixas', // adrian
-  'nbraithwaite', // nigel
-  'jgarcia', // jose
-  'kgonzalez', // kevin
-  'rdelgado', // richard
-  'vcoy', // victor
+  'jgarcia',
+  'dddeleon',
+  'afreixas',
+  'fketter',
+  'agrasso',
+  'kgonzalez',
+  'svillasenor',
+  'nbraithwaite',
+  'rdelgado',
+  'vcrodrigues',
+  'vcoy',
+  'mhernandez',
 ];
 
 const STORAGE_KEY = 'rod.team.selectedUserIds';
