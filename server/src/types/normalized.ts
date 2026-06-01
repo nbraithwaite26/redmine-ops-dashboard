@@ -102,6 +102,36 @@ export interface PaginatedResponse<T> {
   offset: number;
 }
 
+/**
+ * Redmine user group. The base list endpoint (/groups.json) is
+ * admin-gated and 403s for our non-admin key, so the server exposes a
+ * curated catalog of known team groups and looks up members per-group
+ * via /groups/:id.json?include=users (which IS readable). Mirrors the
+ * frontend's Group shape.
+ */
+export interface NormalizedGroup {
+  id: number;
+  name: string;
+  members: NormalizedUser[];
+}
+
+/**
+ * Out-of-office entry. Sourced from Easy Redmine's
+ * /easy_attendances.json — only rows whose activity has at_work=false are
+ * surfaced here (Vacation, Holiday, Sick, etc.). Mirrors the frontend's
+ * TimeOffEntry shape in src/types/redmine.ts.
+ */
+export interface NormalizedTimeOffEntry {
+  id: number;
+  user: NormalizedUser;
+  /** ISO YYYY-MM-DD; derived from the attendance row's `arrival` timestamp. */
+  date: string;
+  /** Activity name from Easy Redmine (e.g. "Vacation", "Holiday Mexico"). */
+  type: string;
+  /** Hours out that day (full day ≈ 8). */
+  hours: number;
+}
+
 export interface MetadataBundle {
   statuses: string[];
   trackers: string[];

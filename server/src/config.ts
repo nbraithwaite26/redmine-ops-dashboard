@@ -53,7 +53,10 @@ export const config = {
   redmineApiKey: env.REDMINE_API_KEY,
   readOnly: env.REDMINE_READ_ONLY === 'true',
   port: env.PORT,
-  allowedOrigin: env.ALLOWED_ORIGIN,
+  // Comma-separated origins → array. Lets the backend accept both
+  // http://localhost:5173 and the host machine's LAN URL during dev so
+  // a teammate on the same network can hit Vite via http://<lan-ip>:5173.
+  allowedOrigin: env.ALLOWED_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean),
   logLevel: env.LOG_LEVEL,
   admin: {
     enabled: adminEnabled,

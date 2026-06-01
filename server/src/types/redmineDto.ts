@@ -125,6 +125,45 @@ export interface RedmineEnumerationDto {
   is_default?: boolean;
 }
 
+/**
+ * Easy Redmine attendance activity (`easy_attendance_activity` nested
+ * object on each attendance row). `at_work` is the OOO discriminator —
+ * false means the user is out (Vacation, Holiday, Sick…).
+ */
+/**
+ * Redmine user group. Used as the data source for the dashboard's team
+ * picker. The base /groups/:id.json returns just {id, name}; pass
+ * include=users to also embed the member list.
+ */
+export interface RedmineGroupDto {
+  id: number;
+  name: string;
+  users?: RedmineUserRef[];
+}
+
+export interface EasyAttendanceActivityDto {
+  id: number;
+  name: string;
+  at_work: boolean;
+  internal_name?: string;
+  is_default?: boolean;
+}
+
+/**
+ * Easy Redmine attendance row. Returned by /easy_attendances.json. The
+ * frontend OOO card filters these by activity.at_work=false.
+ */
+export interface EasyAttendanceDto {
+  id: number;
+  user: RedmineUserRef;
+  /** ISO 8601 timestamp, e.g. "2026-05-29T13:05:00Z". */
+  arrival: string;
+  departure?: string | null;
+  hours: number;
+  description?: string;
+  easy_attendance_activity: EasyAttendanceActivityDto;
+}
+
 export interface RedminePaginated<TKey extends string, TItem> {
   total_count: number;
   offset: number;
