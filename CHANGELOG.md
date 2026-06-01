@@ -175,8 +175,8 @@ A 12-commit pass against pre-live QA findings. See
 The app is now a **two-process app**: the Vite/React frontend plus a Hono
 backend in `server/` that brokers every Redmine call (the API key never
 reaches the browser). Full detail in
-[`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md) and
-[`docs/CHANGE_REQUESTS.md`](docs/CHANGE_REQUESTS.md).
+[`docs/archive/IMPLEMENTATION_STATUS.md`](docs/archive/IMPLEMENTATION_STATUS.md) and
+[`docs/archive/CHANGE_REQUESTS_SHIPPED.md`](docs/archive/CHANGE_REQUESTS_SHIPPED.md).
 
 - **Backend proxy + writes** — Hono app with read-only/request-id/rate-limit
   middleware, snake→camel adapters, admin auth (bcrypt + HMAC-signed session
@@ -212,7 +212,7 @@ all clean.
 ### Refactor session (Phases 0 → H)
 
 A focused review-and-optimize pass after CR #14. Behavior-preserving;
-no new product features. See [`docs/REFACTOR_LOG.md`](docs/REFACTOR_LOG.md)
+no new product features. See [`docs/archive/REFACTOR_LOG.md`](docs/archive/REFACTOR_LOG.md)
 for the per-phase notes.
 
 - **Phase 0** — Theme-aware logo swap: light loads `logo.png`, dark
@@ -245,7 +245,7 @@ for the per-phase notes.
   metric grids → 1/2/4, 3-up project grids → 1/2/3, two-pane
   layouts and modal grids collapse to single column.
 - **Phase H** — Docs + final validation pass. This entry,
-  `docs/REFACTOR_LOG.md`, and a clean run of typecheck / lint /
+  `docs/archive/REFACTOR_LOG.md`, and a clean run of typecheck / lint /
   test / build.
 
 Test arc: 215 → 255 passing. Lint warnings: 2 → 0.

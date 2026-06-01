@@ -11,10 +11,8 @@ The repository ships a **frontend** (Vite + React + TypeScript) and a **Hono bac
 - [docs/FEATURES.md](./docs/FEATURES.md) — feature checklist for every page and component
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — code layout, data flow, backend design
 - [docs/API.md](./docs/API.md) — backend API surface (`/api/redmine`, `/api/auth`, `/api/admin`, `/api/sync-events`)
-- [docs/IMPLEMENTATION_STATUS.md](./docs/IMPLEMENTATION_STATUS.md) — what's shipped vs. pending against the integration plan
-- [docs/INTEGRATION_PLAN.md](./docs/INTEGRATION_PLAN.md) — the live-Redmine integration plan
-- [docs/CHANGE_REQUESTS.md](./docs/CHANGE_REQUESTS.md) — running log of requested UI changes
-- [docs/SCAFFOLD_PLAN.md](./docs/SCAFFOLD_PLAN.md) — approved implementation plan for CRs #1–#11
+- [docs/ROADMAP.md](./docs/ROADMAP.md) — forward-looking plan (now / on-hold / later)
+- [docs/CHANGE_REQUESTS.md](./docs/CHANGE_REQUESTS.md) — active CR backlog (shipped CRs and historical plans live under `docs/archive/`)
 
 ## Features
 

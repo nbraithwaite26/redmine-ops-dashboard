@@ -1,10 +1,8 @@
 # Roadmap
 
 Forward-looking plan for the Redmine Operations Dashboard. Complements
-[`CHANGE_REQUESTS.md`](./CHANGE_REQUESTS.md) (per-CR scope) and
-[`IMPLEMENTATION_STATUS.md`](./IMPLEMENTATION_STATUS.md) (what's shipped).
-
-_Last updated: 2026-05-27._
+[`CHANGE_REQUESTS.md`](./CHANGE_REQUESTS.md) (active CRs) and
+[`archive/CHANGE_REQUESTS_SHIPPED.md`](./archive/CHANGE_REQUESTS_SHIPPED.md) (what's shipped).
 
 Split into **Now** (build-ready on the current single-team architecture) and
 **Later** (the platform evolution to team hosting — planned and sequenced, but
