@@ -59,6 +59,9 @@ export const deleteTimeEntry = api.deleteTimeEntry.bind(api);
 export const getUsers = api.getUsers.bind(api);
 export const getProjectMembers = api.getProjectMembers.bind(api);
 
+export const getGroups = api.getGroups.bind(api);
+export const getGroup = api.getGroup.bind(api);
+
 export const getIssueStatuses = api.getIssueStatuses.bind(api);
 export const getTrackers = api.getTrackers.bind(api);
 export const getPriorities = api.getPriorities.bind(api);

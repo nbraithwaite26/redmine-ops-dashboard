@@ -11,6 +11,8 @@ import type {
   ConnectionSettings,
   ConnectionStatus,
   DirectoryLink,
+  Group,
+  GroupSummary,
   Issue,
   IssuePriority,
   IssueStatus,
@@ -539,6 +541,15 @@ export const realRedmineApi: RedmineApi = {
     }));
   },
 
+  async getGroups(): Promise<GroupSummary[]> {
+    const res = await httpGet<{ items: GroupSummary[] }>('/groups');
+    return res.items;
+  },
+
+  async getGroup(id: number): Promise<Group> {
+    return httpGet<Group>(`/groups/${id}`);
+  },
+
   async getIssueStatuses(): Promise<string[]> {
     return (await getMetadata()).statuses;
   },
@@ -604,13 +615,16 @@ export const realRedmineApi: RedmineApi = {
     return { users: [...userMap.values()], issues, allocations };
   },
 
-  async getTimeOff(_range: { from: string; to: string }): Promise<TimeOffEntry[]> {
-    // TODO(real source): leave/out-of-office is NOT a Redmine time activity on
-    // this instance (the /metadata activity list is all work codes). It lives
-    // in the separate "AE calendar" module — confirm its plugin/endpoint and
-    // field shape, then map it here. Returns empty until wired so the feature
-    // degrades gracefully in real mode.
-    return [];
+  async getTimeOff(range: { from: string; to: string }): Promise<TimeOffEntry[]> {
+    // Sourced from Easy Redmine's /easy_attendances.json on this instance —
+    // the backend filters to rows where activity.at_work=false (Vacation,
+    // Holiday, Sick, etc.) and clips to the requested window. See
+    // server/src/routes/timeOff.ts for the pagination strategy.
+    const res = await httpGet<{ items: TimeOffEntry[] }>('/time-off', {
+      from: range.from,
+      to: range.to,
+    });
+    return res.items;
   },
 
   async getDirectoryLinks(): Promise<DirectoryLink[]> {

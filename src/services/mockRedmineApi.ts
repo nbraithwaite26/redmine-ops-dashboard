@@ -298,6 +298,16 @@ export const mockRedmineApi: RedmineApi = {
     return wait(mockUsers);
   },
 
+  // ─── Groups ──────────────────────────────────────────────────────────
+  // Mock mode just exposes a single "All engineers" group containing every
+  // mock user — enough for unit tests / Storybook-style demos.
+  async getGroups() {
+    return wait([{ id: 1, name: 'All engineers' }]);
+  },
+  async getGroup(id: number) {
+    return wait({ id, name: 'All engineers', members: mockUsers });
+  },
+
   // ─── Metadata ────────────────────────────────────────────────────────
   async getIssueStatuses() {
     return wait(mockIssueStatuses);

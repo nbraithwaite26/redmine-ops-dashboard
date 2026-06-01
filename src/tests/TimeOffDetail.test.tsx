@@ -38,6 +38,37 @@ describe('<TimeOffDetail />', () => {
     );
   });
 
+  it('shows a hover popover on a day with entries', async () => {
+    render(<TimeOffDetail onClose={() => {}} />);
+    await screen.findByTestId('timeoff-detail');
+
+    // Wait for the time-off fetch to settle (loading→cells). Day cells
+    // only appear once the entries land.
+    await waitFor(() => {
+      expect(screen.queryByTestId('timeoff-loading')).toBeNull();
+      expect(screen.getAllByTestId(/^timeoff-day-/).length).toBeGreaterThan(0);
+    });
+
+    // Pick a day cell that has entries — `background:` style on a child
+    // pill is the cheapest cross-view signal (week pills + month dots both
+    // set inline backgrounds).
+    const dayCells = screen.getAllByTestId(/^timeoff-day-/);
+    const cellWithEntries = dayCells.find((cell) =>
+      cell.querySelector('[style*="background"]'),
+    );
+    if (!cellWithEntries) return; // No mock entries this week — nothing to test.
+
+    expect(screen.queryByTestId('timeoff-day-popover')).toBeNull();
+
+    fireEvent.mouseEnter(cellWithEntries);
+    expect(await screen.findByTestId('timeoff-day-popover')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(cellWithEntries);
+    await waitFor(() =>
+      expect(screen.queryByTestId('timeoff-day-popover')).toBeNull(),
+    );
+  });
+
   it('calls onClose from the close button, the backdrop, and Escape', async () => {
     const onClose = vi.fn();
     render(<TimeOffDetail onClose={onClose} />);

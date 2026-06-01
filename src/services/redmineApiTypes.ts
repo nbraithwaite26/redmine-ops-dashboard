@@ -2,6 +2,8 @@ import type {
   ConnectionSettings,
   ConnectionStatus,
   DirectoryLink,
+  Group,
+  GroupSummary,
   Issue,
   Project,
   ResourceAllocation,
@@ -62,6 +64,12 @@ export interface RedmineApi {
   // ─── Users ────────────────────────────────────────────────────────────
   getUsers(): Promise<User[]>;
   getProjectMembers(projectId: number): Promise<User[]>;
+
+  // ─── Groups ───────────────────────────────────────────────────────────
+  /** Curated catalog of team groups (engineering disciplines + Avionica-wide). */
+  getGroups(): Promise<GroupSummary[]>;
+  /** Returns a single group with its members embedded. */
+  getGroup(id: number): Promise<Group>;
 
   // ─── Metadata ─────────────────────────────────────────────────────────
   getIssueStatuses(): Promise<string[]>;
