@@ -14,6 +14,617 @@ Status legend:
 
 ---
 
+## #33 — Outbound API keys so external programs can drive the dashboard
+
+**Status:** 📥 Collected, not yet planned
+
+**Request:** Let external programs (scripts, Zapier-style integrations,
+n8n, another internal tool) send commands to the dashboard's backend via
+an API key. The dashboard then forwards them to Redmine using the
+already-injected upstream key, so the external caller never sees the
+Redmine credentials. Effectively: turn `/api/redmine/*` into a re-usable
+proxy authenticated by dashboard-issued keys.
+
+**Why now:** The dashboard's middleware stack already proxies + caches
+Redmine calls, normalizes shapes, enforces read-only mode, rate-limits
+per-IP, and audits writes. Re-exposing that to programs (rather than
+making every script bring its own Redmine key + reimplement filtering /
+adapters) consolidates secrets and gives one place to revoke access.
+Pairs naturally with CR #30 (portable per-user build) and CR #32 (template
+wizard), both of which assume a single shared place to mediate Redmine
+writes.
+
+**Goals:**
+
+- **One-secret integration.** External callers send `Authorization: Bearer
+  <dashboard-key>`; the backend resolves that to a principal + scopes and
+  forwards to Redmine with the server-side upstream key.
+- **Hashed at rest.** Raw keys are shown to the admin exactly once on
+  creation; storage only ever holds the hash (bcrypt or scrypt — re-use
+  the bcryptjs already in `server/package.json` for `ADMIN_PASSWORD_HASH`).
+- **Scoped.** Per-key `read` / `write` scopes. `write` is required for
+  POST/PATCH/DELETE; `REDMINE_READ_ONLY=true` still wins.
+- **Auditable.** Every API-key request lands in the existing admin history
+  log with the key's id, principal name, route, status. Rotating /
+  revoking a key takes immediate effect.
+- **Discoverable.** Settings page lists keys (name, last-used, scopes,
+  prefix), with create / revoke buttons. Admin-session-gated, same as the
+  existing `/api/admin/*` surface.
+
+**Non-goals:**
+
+- OAuth 2 / OIDC flows — out of scope; the dashboard isn't an identity
+  provider.
+- Per-user signed JWTs — too much surface for a small team's needs.
+- Webhook *receiving* (Redmine → dashboard) — this CR is outbound:
+  external → dashboard → Redmine.
+- IP allow-listing per key — a defensible add-on, but deferred until a key
+  is actually targeted.
+
+**Phased scope:**
+
+**Phase 1 — Core auth + storage** *(~half-day)*
+
+1. **Storage layer** — new `server/src/store/apiKeyStore.ts`:
+   - Backing file `server/data/api-keys.jsonl` (mirrors the existing
+     `history.jsonl` pattern in `config.HISTORY_DB`).
+   - Shape per row: `{ id, name, prefix, hash, scopes: ('read'|'write')[],
+     createdAt, createdBy, lastUsedAt?, revokedAt? }`.
+   - `prefix` = first 8 chars of the raw key, retained in plaintext for
+     display ("rod_abc12345…"). The rest is bcrypt-hashed and discarded
+     from memory.
+   - Operations: `mintKey({ name, scopes })` → returns `{ raw, record }`;
+     `findByRaw(raw)` → record or null (constant-time-ish; iterate +
+     compare against `bcrypt.compare`); `revoke(id)`; `list()`;
+     `touchLastUsed(id)`.
+   - In-memory index by `prefix` so a request only bcrypt-compares
+     against ≤1 hash unless prefixes collide.
+
+2. **Middleware** — new `server/src/middleware/apiKey.ts`:
+   - Looks at `Authorization: Bearer <token>` first; falls back to
+     `X-API-Key: <token>` for callers that can't set Authorization.
+   - On match → stash `{ id, name, scopes }` on context as
+     `c.set('apiKey', …)`; fire-and-forget `touchLastUsed`.
+   - On miss → return 401 with `code: API_KEY_INVALID`.
+   - On scope mismatch (e.g. write call with `read`-only key) → 403 with
+     `code: API_KEY_FORBIDDEN`.
+
+3. **Mount path** — new sub-app `/api/v1/redmine/*` that re-routes the
+   existing handlers from `server/src/index.ts` lines 67-73 BUT with the
+   `apiKey` middleware in front of the `session` middleware. This keeps
+   the browser-facing `/api/redmine/*` paths unchanged (session-auth) and
+   gives external clients a stable versioned surface. Internally both
+   paths share the exact same route handlers — no fork.
+
+4. **Read-only + rate-limit** — the existing `readOnly()` and `rateLimit()`
+   middleware composes cleanly. Optionally key the rate-limit bucket on
+   the API key id rather than IP when a key is present, so two services
+   sharing a NAT don't throttle each other.
+
+**Phase 2 — Admin CRUD + UI** *(~half-day)*
+
+5. **Routes** — new `server/src/routes/admin/apiKeys.ts`, mounted under
+   the existing admin group:
+   - `GET /api/admin/api-keys` → list (name, prefix, scopes,
+     createdAt/by, lastUsedAt, revokedAt).
+   - `POST /api/admin/api-keys` → mint. Body `{ name, scopes }`.
+     Response includes the **raw key** exactly once.
+   - `DELETE /api/admin/api-keys/:id` → revoke. Soft-delete by stamping
+     `revokedAt`; `findByRaw` rejects revoked records.
+6. **Settings page UI** — new card on the existing Settings page (or a
+   sub-route `/settings/api-keys`):
+   - Table of keys, with "Last used" / scopes / "Revoke" buttons.
+   - "New key" modal → name + scopes → on submit, shows the raw key in a
+     copy-to-clipboard box with a one-time-only warning. Closing the
+     modal forgets the raw key.
+   - Read-only mode disables the "Write" scope option in the modal and
+     surfaces a banner.
+
+**Phase 3 — Audit + ergonomics** *(~quarter-day)*
+
+7. **Audit hooks** — extend the existing history middleware so each
+   `/api/v1/redmine/*` call records `{ at, principal: 'api:'+keyName,
+   method, path, status }`. Already wired for `/api/admin/*` writes —
+   re-use the same writer.
+8. **Self-describe endpoint** — `GET /api/v1/whoami` returns `{ name,
+   scopes }` of the calling key. Lets integrators sanity-check their
+   setup without writing any state.
+9. **README / `docs/API.md` update** — add an "External integrations"
+   section: how to mint a key, how to call (curl example), the routes
+   available, the scope semantics, the rate-limit headers. Mention CR #29
+   server cache for callers that loop.
+
+**Security guardrails to bake in:**
+
+- Raw keys generated via `crypto.randomBytes(32).toString('base64url')`.
+- Hash cost ≥ 10 (`bcrypt.hash(raw, 12)`).
+- Constant-time prefix match before bcrypt-compare to avoid timing leaks
+  on the index.
+- Never log raw keys, even on error paths. The middleware that reads them
+  should redact `Authorization`/`X-API-Key` headers before any logger
+  call.
+- The admin-routes mount stays session-gated — minting a key is a
+  privileged operation; a key holder can't create new keys.
+- Optional env `API_KEYS_DISABLED=true` to short-circuit the whole feature
+  for paranoid deployments.
+
+**Acceptance:**
+
+- Server typecheck + frontend typecheck clean.
+- New tests:
+  - `apiKeyStore.test.ts` — mint / find / revoke round-trip; hash
+    verification; revoked keys reject.
+  - `apiKey.middleware.test.ts` — happy path, missing header, wrong
+    scope, revoked key, write call against read-only mode.
+  - `admin/apiKeys.test.ts` — admin can create/list/revoke; non-admin gets
+    401.
+  - `ApiKeysPage.test.tsx` — create flow shows raw key exactly once;
+    revoke removes from list.
+- Manual smoke against the live instance:
+  ```bash
+  KEY=$(curl -s -X POST .../api/admin/api-keys -d '{"name":"test","scopes":["read"]}' | jq -r .raw)
+  curl -H "Authorization: Bearer $KEY" .../api/v1/whoami
+  curl -H "Authorization: Bearer $KEY" .../api/v1/redmine/projects?limit=3
+  # write with a read-only key → 403
+  curl -X POST -H "Authorization: Bearer $KEY" .../api/v1/redmine/time-entries -d '{...}'
+  ```
+- The existing browser session flow (`/api/redmine/*`) is untouched — all
+  390+ existing tests still pass.
+
+**Critical files (new + edited):**
+
+- new `server/src/store/apiKeyStore.ts`
+- new `server/src/middleware/apiKey.ts`
+- new `server/src/routes/admin/apiKeys.ts`
+- `server/src/index.ts` (mount `/api/v1/redmine` group + admin route)
+- `server/src/config.ts` (add `API_KEYS_DISABLED` env)
+- new `src/pages/Settings/ApiKeysSection.tsx`
+- `src/services/redmineApiTypes.ts` (`ApiKey` type if the UI needs it)
+- `docs/API.md` (new "External integrations" section)
+- new tests as listed under Acceptance.
+
+**Open questions for the user:**
+
+- Should the external surface stay at `/api/v1/redmine/*` (mirrors the
+  internal proxy 1:1, full power) or should we curate a smaller verb set
+  (`/api/v1/issues`, `/api/v1/time-entries`, …) tailored for integrations?
+  My default is mirror — less code, less drift.
+- Per-key scopes — is `read` / `write` enough, or do you want
+  `time-entries:write` / `issues:write` granularity? Granularity adds
+  complexity; my default is the binary split.
+- Visible to which users — admin only (Settings page gate matches
+  existing `/api/admin` session check), or every team member can mint
+  their own keys? Admin-only is safer; we can loosen later.
+
+---
+
+## #32 — Project-from-template wizard (Easy Redmine `/templates` API)
+
+**Status:** 📥 Collected, not yet planned
+
+**Request:** Wire the Easy Redmine project-template system into the dashboard
+so engineers can spin up a new project from a curated catalog of scaffolds
+(STC, Custom DDP, SOW, Foreign Validation, etc.) instead of building from
+scratch each time. The sidebar already has a `Project Builder` link and a
+recently-opened workspace card pointing at `/project-builder`; this CR fills
+in the back half.
+
+**Why now:** This instance has **166 project templates** already authored
+(both generic engineering scaffolds and historical customer projects flagged
+for re-use), exposed by a documented Easy Redmine REST surface. Nothing in
+the dashboard touches them today — every new project gets created in the
+Redmine UI by hand, which the team has flagged as repetitive.
+
+**Discovered upstream API** (from `/easy_swagger.json`):
+
+| Method + Path | Purpose |
+|---|---|
+| `GET /templates.json` | List all templates. Supports `limit`/`offset` (max 100), `easy_query_q`, `set_filter=1`. Wire shape: top-level `projects: [...]` — the rows are regular project objects flagged with `easy_is_easy_template: true`. |
+| `POST /templates/:id/create.json` | Instantiate a new project from the template. Body = `CreateProjectTemplateApiRequest` (parent_id, start_date, dates_settings, change_issues_author, inherit_time_entry_activities, nested `project` payload). |
+| `POST /templates/:id/copy.json` | Copy template contents INTO an existing project (`CopyProjectTemplateApiRequest`). |
+| `POST /templates/:id/{add,restore,destroy}.json` | Mark / restore / delete a template — out of scope for this CR. |
+
+**Discriminator:** templates ARE regular `/projects/:id` records carrying
+`easy_is_easy_template: true`. Detail + child issues remain readable through
+the existing `/projects/:id.json` and `/issues.json?project_id=X` endpoints,
+so we don't need a separate read path.
+
+**Catalog landscape on the instance (166 templates total):**
+
+- **Reusable engineering scaffolds** (curated default surface for the
+  wizard):
+  - `1561` A Template [CAA] Aircraft, Equipment [#]
+  - `1562` Template *(generic, parent = 1561)*
+  - `1563` Template [REV] Aircraft, Equipment [#]
+  - `1564` Template [SOW] Aircraft, Equipment [#]
+  - `1820` / `1821` Template Project
+  - `1839` Custom DDP Template Project
+  - `1933` Foreign Validation Project Template
+  - `2068` Patent Project Template
+  - `1325` Custom Engineering Services
+  - `1063`, `1095`, `1022` Schedule Major/Minor Change [Template]
+- **~152 historical customer projects** (KFAERO, COPA, JetBlue, Cathay, …)
+  archived as templates so they can be cloned for new customer engagements.
+
+**Goals:**
+
+- One-click "new project from template" wizard inside `/project-builder`.
+- Curated catalog up top (the engineering scaffolds), customer-archive
+  templates discoverable via search/filter (so the picker isn't 166
+  options deep).
+- Capture the create-time inputs the upstream schema cares about: parent
+  project, start date, dates-shift mode, target author, inherit-activities
+  toggle, plus the new project's name / number / customer (custom fields
+  on the wire are pre-populated by the template — we just collect overrides).
+- After create, navigate the user to the new project's task list.
+
+**Non-goals:**
+
+- Template authoring / editing — admins still do that in Easy Redmine.
+- The `copy-into-existing-project` flow (`/templates/:id/copy`) — defer
+  until there's demand.
+- A no-code "design your own template" UI inside the dashboard.
+
+**Phased scope:**
+
+**Phase 1 — Backend proxy** *(~half-day)*
+
+1. New `server/src/routes/templates.ts`:
+   - `GET /api/redmine/templates` — paginates upstream `/templates.json`
+     (re-use the same `set_filter=1`-walk pattern from `timeOff.ts` if the
+     EQ filters turn out to be ignored here too). Returns
+     `{ items: { id, name, identifier, parentId, tier } }`. `tier` is
+     server-computed: 0 = curated engineering scaffolds (allow-list of
+     IDs above), 1 = everything else, alpha within tier — same pattern as
+     `engineeringOrder.ts` on the frontend.
+   - `POST /api/redmine/templates/:id/create` — validates the body with
+     Zod, forwards to `/templates/:id/create.json`. Returns the created
+     project's normalized shape.
+2. `server/src/adapters/template.ts` — maps the upstream `projects[]` row
+   to `NormalizedTemplate`. Strips fields the UI doesn't need.
+3. `server/src/types/{redmineDto,normalized}.ts` — `EasyTemplateDto` +
+   `NormalizedTemplate`.
+4. Mount in `server/src/index.ts` alongside the existing `/groups` route.
+
+**Phase 2 — Frontend API surface** *(~1h)*
+
+5. Add `Template` type + `getTemplates()` + `createProjectFromTemplate(id, input)`
+   to the redmineApi facade (matching the mock + real impls, exposed via
+   the named-export bind in `redmineApi.ts`). Mirror the `getGroup` /
+   `getGroups` pattern I added in CR-context for groups.
+
+**Phase 3 — Wizard UI** *(1-2 days)*
+
+6. Replace or extend `/project-builder` (`src/pages/ProjectBuilder.tsx` if
+   it exists, else create) with a 3-step wizard:
+   - **Step 1: Pick template.** Curated tier shown first, search box
+     ("Foreign Validation", "Schedule Minor Change", "Cathay", …) filters
+     the broader catalog. Click to preview — fetches `/projects/:id` +
+     `/issues.json?project_id=X&limit=20` to show "this template will
+     bring N tasks" with a sample.
+   - **Step 2: Fill in details.** Required: name, project number (CF #37),
+     customer (CF #225); optional: parent project, start date,
+     dates_settings dropdown (`shift_dates` / `update_dates` / `none`),
+     `inherit_time_entry_activities` toggle, `change_issues_author`
+     (defaults to current user).
+   - **Step 3: Review + create.** Surfaces the resolved payload, fires
+     POST, navigates to `/projects/<new-id>` on success. Surfaces upstream
+     422s in a toast.
+
+**Phase 4 — Polish** *(half-day)*
+
+7. Workspace integration: when the engineering workspace is active (CR-context
+   already shipped), default the dates_settings to `shift_dates`, default
+   the parent to `AIRCRAFT ENGINEERING` (project 127). For Service
+   Operations workspace, leave both unset.
+8. Recently-used templates pinned at the top of step 1 via localStorage
+   (per workspace, mirroring `rod.team.selectedUserIds.<workspace>`).
+9. Read-only mode: respect `useReadOnly()` — the "Create" button disables
+   with the same tooltip every other write surface uses.
+
+**Acceptance:**
+
+- Server typecheck + frontend typecheck clean.
+- New tests: `templates.test.ts` (backend route happy-path + 422
+  pass-through); `ProjectBuilder.test.tsx` (wizard advances through steps,
+  payload matches schema, fires POST exactly once, navigates on success).
+- Manual smoke: create a small dummy project from template `1562` ("Template")
+  pointed at a sandbox parent. Verify the project appears in
+  `/projects.json` and on the All Projects page; delete the dummy
+  afterwards.
+- The catalog endpoint walks 166 templates without hammering upstream
+  (warmer eligibility — see CR #31 if it lands first).
+
+**Critical files (new + edited):**
+
+- new `server/src/routes/templates.ts`
+- new `server/src/adapters/template.ts`
+- `server/src/types/redmineDto.ts`, `normalized.ts`, `index.ts`
+- `src/services/realRedmineApi.ts`, `mockRedmineApi.ts`,
+  `redmineApiTypes.ts`, `redmineApi.ts`
+- new `src/pages/ProjectBuilder.tsx` (or refactor existing)
+- new `src/components/TemplatePicker.tsx`,
+  `TemplateCreateForm.tsx`, `TemplateReviewStep.tsx`
+- new `src/tests/templates.test.ts`,
+  `src/tests/ProjectBuilder.test.tsx`
+
+**Open questions for the user:**
+
+- Which curated template IDs go in the tier-0 allow-list? The list above is
+  my best guess from name patterns; happy to defer to a definitive set.
+- Default parent project — `AIRCRAFT ENGINEERING` (127) for eng, or use
+  the template's own parent (1561 for the generic ones)?
+- Are there custom-field defaults beyond Project Number / Customer that
+  should be wizard inputs (e.g. Civil Av. Auth., Aircraft Type, FOT Target
+  date)?
+
+---
+
+## #31 — Speed up first paint + page-to-page nav (kill dead fetches, count-only queries, browser cache, parallel pagination)
+
+**Status:** 📥 Collected, not yet planned
+
+**Request:** The dashboard feels slow — Home and Dashboard take seconds to
+populate. Profile the actual load waterfalls and ship a stack-ranked set of
+changes that cut both first-paint time and the repeat-nav re-fetch cost,
+without changing data semantics.
+
+**Why now:** Builds on [CR #29](#29) (server-side TTL cache + warmer) and
+matches what's already in the codebase. CR #29 made each upstream page
+cacheable; this CR cuts the *number* of pages the UI asks for in the first
+place and stops re-asking on every navigation.
+
+**Root causes identified during profiling:**
+
+- **Dead-weight fetches.** `src/pages/Home.tsx:93-102` paginates the entire
+  ~3700-issue org dataset via `getIssues()` only to feed the `unassigned`
+  and `waiting` metric cards, which `HOME_METRIC_IDS` (lines 65-70) then
+  filters out before render. ~38 sequential upstream pages, every Home load,
+  zero contribution to the UI.
+- **Pagination-for-count.** `getPastDueIssues().length`, `dueThisWeekCount`,
+  and similar consumers walk every page just to read a count — the
+  paginated wire envelope already carries `total_count`.
+- **No browser-side cache.** Home → Dashboard re-fires identical
+  `/issues`, `/time-entries`, `/past-due` requests because per-page React
+  state is thrown away on unmount. The server cache helps the upstream
+  hop but the browser still pays the trip + JSON parse.
+- **Sequential pagination.** `paginateAll` (`src/services/realRedmineApi.ts:188-205`)
+  fetches pages one-at-a-time. The server warmer (`server/src/warmer.ts:38-65`)
+  already proves the server can serve concurrent reads.
+- **Single 550KB JS chunk.** `framer-motion`, `TeamWorkPanel`, `TimeOffDetail`,
+  charts — all eagerly bundled. Home pays parse/eval cost for code it
+  doesn't render.
+- **No `Cache-Control`/`ETag` on backend GETs.** Browser back-nav and tab
+  refocus can't 304.
+- **Warmer scope mismatch.** After the count-only refactor lands, the
+  warmer will still walk every issue page every 5 minutes for data nobody
+  consumes.
+
+**Phased scope (stack-ranked — biggest win first):**
+
+**Phase 1 — Free wins** *(half-day)*
+
+1. **Drop `getIssues()` from Home.** Delete the call + `allIssues` state in
+   `src/pages/Home.tsx:93-102`. Pure dead weight; eliminates the largest
+   single critical-path fetch on the home page. [S, no risk]
+
+2. **Count-only queries.** Add a `getIssueCount(filters)` helper that hits
+   `/issues?limit=1&offset=0` and reads `total_count` from the envelope.
+   Replace `.length` consumers in `src/services/realRedmineApi.ts:354-365`,
+   `src/pages/Home.tsx:93`, `src/pages/Dashboard.tsx:54,94-103`. Gate on
+   `!selectedTeamIds` — team-scoped past-due still needs the list to filter
+   by assignee. [S-M, server cache key parallel to list keys]
+
+3. **Parallelize `paginateAll`.** After page 0 returns, fire pages 1..N
+   with concurrency 4-6 via `Promise.all`. Mirror the warmer's pattern at
+   `server/src/warmer.ts:38-65`. The server cache (`server/src/cache.ts:185-189`)
+   already coalesces concurrent misses so we won't fan out duplicate
+   upstream calls. [S]
+
+**Phase 2 — Cross-navigation cache** *(half-day)*
+
+4. **In-memory frontend GET cache** with request-dedup and 30-60s TTL.
+   Wrap `httpGet` in `src/services/http.ts`. Invalidated on
+   `syncWithRedmine()` and on every mutating call in
+   `realRedmineApi.ts` (createIssue / updateIssue / createTimeEntry /
+   …). Mirror the server's `invalidate('issues:')` prefix scheme. [M]
+
+5. **`Cache-Control: private, max-age=30` + `ETag` on backend list/detail
+   GETs.** Add in `server/src/routes/issues.ts`, `timeEntries.ts`,
+   `projects.ts`, `gantt.ts`. Lets the browser 304 on back-nav and tab
+   refocus. Pairs with #4 — both layers protect each other. [S]
+
+**Phase 3 — Bundle + warmer trim** *(half-day)*
+
+6. **Route-level code splitting** via `React.lazy()` in `src/App.tsx:5-24`.
+   Lazy-import every page except Home. `framer-motion` and team-panel code
+   move out of the Home critical path. Add a Suspense fallback matching
+   the shell. [M]
+
+7. **Retarget the cache warmer.** After Phase 1 #2 lands, replace the
+   `warmAllPages(request, '/api/redmine/issues')` call at
+   `server/src/warmer.ts:103` with the count-only queries the dashboard
+   actually consumes. Keep paginated warms only for routes still calling
+   `paginateAll<Issue>('/issues')`. Less upstream Redmine load every 5
+   minutes; faster first miss after TTL. [S]
+
+**Non-goals:**
+
+- SSR / hydration — speculative for this size of app.
+- Service worker / offline cache — too much surface area for the win.
+- Redis cache — already scoped separately (see `server/src/cache.ts:13`
+  Phase D note).
+- Aggregator rewrites (`aggregateHours`, `groupByDate`, etc.) — network is
+  the bottleneck, not CPU.
+
+**Expected impact (back-of-envelope):**
+
+- Home cold load: drops by the cost of `getIssues()` walk
+  (~38 pages × 2-5s upstream cold; ~38 × 100ms warm). Biggest single win.
+- Dashboard cold load: count-only past-due + due-this-week eliminates
+  ~10-30 upstream pages.
+- Repeat-nav (Home ↔ Dashboard ↔ Tasks): near-instant once the frontend
+  cache + `Cache-Control` are in place.
+- Initial JS: 550KB → estimated ~150-200KB for Home's chunk after splitting.
+
+**Acceptance:**
+
+- No regression in any of the 405 existing tests.
+- Add tests: count-only helper returns matching numbers vs full-list
+  `.length`; frontend cache dedupes concurrent calls and invalidates on
+  mutation.
+- Manual smoke: cold Home load < 3s warm / < 8s cold against the live
+  upstream. Nav from Home → Dashboard → Tasks → back to Home: subsequent
+  paints under 500ms.
+
+**Critical files:**
+
+- `src/pages/Home.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/services/realRedmineApi.ts`
+- `src/services/http.ts`
+- `src/App.tsx`
+- `server/src/warmer.ts`
+- `server/src/routes/{issues,timeEntries,projects,gantt}.ts`
+
+---
+
+## #30 — Portable per-user desktop build (Windows .exe, manual updates)
+
+**Status:** 📥 Collected, not yet planned
+
+**Request:** Ship the dashboard as a portable Windows .exe each teammate runs
+on their own PC. First launch shows a login screen → user enters Redmine URL +
+username + password → server fetches their personal `api_key` via Basic Auth
+against `/users/current.json` and stores it locally in `%APPDATA%`. No shared
+backend, no env files to edit. Updates are manual — drop a new .exe in a shared
+folder, teammates replace theirs. Target team size <20.
+
+**Why now:** Removes the single shared `REDMINE_API_KEY` chokepoint without
+the full Phase A (Entra SSO) prerequisite from [ROADMAP.md](./ROADMAP.md).
+Realizes "Phase B — Per-user Redmine keys" pulled forward, scoped to
+per-user-localhost instead of multi-tenant hosting.
+
+**Goals:**
+
+- Zero-setup distribution: unzip → double-click → log in → done.
+- Each teammate's API key never leaves their machine.
+- Manual update flow ("replace the .exe") with a UI banner when a new version
+  is available.
+- Existing single-user dev workflow (`npm run dev:all`) keeps working untouched.
+
+**Non-goals:**
+
+- Auto-installing updates (manual replace is fine for this team size).
+- Multi-user / shared deployment — still Phase A+ on the roadmap.
+- macOS/Linux builds (Windows-only initially; Bun compile can add later).
+- Code signing (internal team, deferred).
+
+**Phased scope:**
+
+**Phase 1 — Per-user login flow** *(works in dev, no packaging yet)*
+
+1. **Local config file** at `%APPDATA%\redmine-ops-dashboard\config.json` with
+   schema `{ schemaVersion, baseUrl, apiKey, userLogin, savedAt }`.
+   `schemaVersion` lets future versions migrate; missing/older versions run a
+   migration function on startup.
+2. **New `server/src/store/localConfig.ts`** — typed read/write/clear,
+   in-memory cache, file lock to avoid torn writes, migration registry keyed
+   on `schemaVersion`.
+3. **`server/src/config.ts` change** — `REDMINE_API_KEY` / `REDMINE_BASE_URL`
+   become optional. A `PORTABLE=true` env var (set in the .exe build) tells
+   the server to read key/baseUrl from `localConfig` at request time.
+4. **New routes in `server/src/routes/auth.ts`:**
+   - `POST /api/auth/redmine-login` — `{ baseUrl, username, password }` →
+     Basic Auth to `/users/current.json` → save key to localConfig → return
+     `{ user: { login, firstname, lastname } }`. Never returns the key.
+   - `DELETE /api/auth/redmine-login` — wipes the config file ("Disconnect").
+   - `GET /api/auth/status` — returns `{ linked, user? }`.
+5. **`server/src/redmineClient.ts` change** — in portable mode, pull
+   `apiKey`/`baseUrl` from `localConfig` at request time. If unlinked, throw a
+   typed `NotLinkedError` → middleware translates to **HTTP 412**. Frontend
+   treats 412 as "show login screen."
+6. **401 handling** — when Redmine returns 401 (key revoked/account reset),
+   clear the cached key and return 412. Frontend re-prompts instead of
+   white-screening.
+7. **Frontend** — new `<RedmineLoginPage>` shown when `/api/auth/status`
+   returns `linked: false` or any API call returns 412. Pre-filled URL field,
+   editable for VPN/staging. "Disconnect" item in settings/header.
+8. **Gate the admin/session stack behind `PORTABLE=false`.**
+   `server/src/middleware/session.ts`, `/api/admin/*`, and audit history are
+   skipped in portable builds — they assume shared deployment.
+
+**Phase 2 — Single-port build, frontend served by Hono**
+
+1. Mount `dist/` in `server/src/index.ts` via `serveStatic({ root: './dist' })`
+   after all `/api/*` routes. SPA fallback to `index.html`.
+2. **Cache keys include app version** — prepend `process.env.APP_VERSION`
+   (baked at build time) to every cache key in `server/src/cache.ts`.
+   Upgrading starts cold instead of serving stale entries shaped by old code.
+3. **Port fallback** — try configured port, on `EADDRINUSE` bind to `:0`, log
+   + write assigned port to `%APPDATA%\redmine-ops-dashboard\runtime.json`.
+4. **Auto-open browser on startup** in portable mode when the config file is
+   fresh (first run) or via `--open` flag from launcher.
+
+**Phase 3 — Bun compile + distribution**
+
+1. `bun build server/src/index.ts --compile --target=bun-windows-x64
+   --outfile=redmine-ops-dashboard.exe`. Embeds runtime + bundled server +
+   bundled `dist/` static files.
+2. **Embedded version constant** — `APP_VERSION` baked from `package.json`.
+   Exposed via `GET /api/version`.
+3. Ship folder layout:
+   ```
+   redmine-ops-dashboard-v0.4.0/
+     redmine-ops-dashboard.exe
+     start.bat              ← runs the exe + opens the browser
+     README.txt             ← one-page setup, troubleshooting, update path
+   ```
+4. Zip + drop in shared folder (`latest/` + dated archive for rollback).
+
+**Phase 4 — Version-check banner**
+
+1. Server fetches `version.json` from a configurable URL on startup + every
+   6 hours. Schema: `{ version, downloadUrl, notes }`.
+2. `GET /api/version` returns `{ current, latest, downloadUrl, notes }`.
+3. Frontend banner: *"vX.Y.Z available — click to download. Replace your .exe
+   and relaunch."* Banner links to `downloadUrl`, doesn't swap files itself.
+4. **Keep N-1 in the shared folder** — `latest/` + `previous/`. README
+   documents the revert path.
+
+**File touch list (estimate):**
+
+- New: `server/src/store/localConfig.ts`, `src/pages/RedmineLoginPage.tsx`,
+  `start.bat`, `README.txt`, `scripts/build-portable.mjs`, `version.json`
+  (shared folder, not repo)
+- Modified: `server/src/config.ts`, `server/src/redmineClient.ts`,
+  `server/src/index.ts`, `server/src/routes/auth.ts`, `server/src/cache.ts`,
+  `server/src/middleware/errorHandler.ts` (add 412 mapping),
+  `src/services/realRedmineApi.ts` (handle 412), `package.json`
+  (add `build:portable` script, Bun dep)
+
+**Out of scope:**
+
+- macOS/Linux builds (Bun compile supports it; add later if asked).
+- Code signing (internal trust, deferred).
+- Auto-update / silent install (intentional — manual replace is the spec).
+- OS keyring integration (`keytar`/DPAPI) — start with plain JSON in
+  `%APPDATA%`, same threat model as today's `.env.local`. Upgrade path noted
+  but not built.
+
+**Open questions:**
+
+1. **Where does `version.json` live?** Shared network folder, SharePoint, or
+   private GitHub releases? (UNC paths vs HTTPS need different fetch code.)
+2. **Default Redmine URL** to pre-fill on the login screen?
+3. **Should the .exe also be the dev entry point** (`PORTABLE=true npm run
+   dev` mode) for testing, or strictly a build artifact?
+4. **Multi-version coexistence on one PC** — if a teammate keeps v0.3 and v0.4
+   side by side, should they share `%APPDATA%` config or namespace by version?
+   (Default: **shared**, so no re-login on upgrade.)
+
+---
+
 ## #29 — Speed up Redmine API pulls (server-side cache, parallel pagination, prefetch)
 
 **Status:** ✅ Shipped (2026-05-28)

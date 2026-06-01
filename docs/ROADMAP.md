@@ -15,6 +15,14 @@ intentionally deferred).
 These run on today's architecture (single shared Redmine key, single admin)
 and deliver value without the multi-user work below.
 
+- **CR #30 — Portable per-user desktop build** *(planned)*. Bun-compiled
+  Windows .exe each teammate runs on their own PC. First launch prompts for
+  Redmine URL + username + password; server fetches the user's `api_key` via
+  Basic Auth against `/users/current.json` and stores it locally in
+  `%APPDATA%`. Manual updates via a shared folder + in-app version banner.
+  Pulls "Phase B — Per-user Redmine keys" (below) forward without requiring
+  the full SSO platform rework — scoped to per-user-localhost, team <20. See
+  [`CHANGE_REQUESTS.md`](./CHANGE_REQUESTS.md#30) for full scope.
 - **CR #21 — Dynamics/Dataverse CRM display** *(active near-term)*. A backend
   broker (`dynamicsClient.ts`, sibling to `redmineClient.ts`) authenticates to
   Dynamics 365 / Dataverse via the Azure AD **client-credentials flow**
