@@ -16,6 +16,7 @@ import { buildTeamMetrics } from '../data/mockData';
 import { weekRange } from '../lib/hoursAggregate';
 import { distinctEngineersOut } from '../lib/timeOff';
 import { today } from '../lib/format';
+import { useSelectedTeam } from '../hooks/useSelectedTeam';
 
 // Team-first Overview. Personal work (my tasks / my hours) now lives on the
 // Tasks and Hours pages, so the Dashboard leads with the team: team metrics +
@@ -39,6 +40,12 @@ export default function Dashboard() {
   const [selectedTasks, setSelectedTasks] = useState(0);
   const [outCount, setOutCount] = useState(0);
   const [timeOffOpen, setTimeOffOpen] = useState(false);
+
+  // Globally-selected team — drives every team-scoped metric on the page.
+  // `null` while the team panel is still initializing; that's also the
+  // signal to `buildTeamMetrics` to show the legacy org-wide numbers
+  // (rather than collapse to zero before the picker has loaded).
+  const { selectedIds: selectedTeamIds } = useSelectedTeam();
 
   // Issue counts are not week-scoped — load once.
   useEffect(() => {
@@ -66,17 +73,22 @@ export default function Dashboard() {
   }, [range.from, range.to]);
 
   // Engineers out in the selected week (drives the Engineers-out card).
+  // When a team selection is active, filter the time-off entries down to
+  // that subset so the card reflects "engineers in MY team who are out".
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const off = await getTimeOff({ from: range.from, to: range.to });
       if (cancelled) return;
-      setOutCount(distinctEngineersOut(off));
+      const scoped = selectedTeamIds
+        ? off.filter((e) => selectedTeamIds.includes(e.user.id))
+        : off;
+      setOutCount(distinctEngineersOut(scoped));
     })();
     return () => {
       cancelled = true;
     };
-  }, [range.from, range.to]);
+  }, [range.from, range.to, selectedTeamIds]);
 
   // Open issues due within the next 7 days (today inclusive).
   const dueThisWeekCount = useMemo(() => {
@@ -92,11 +104,15 @@ export default function Dashboard() {
 
   const teamMetrics = buildTeamMetrics({
     allIssues,
+    pastDueIssues: pastDue,
     pastDueCount: pastDue.length,
     dueThisWeekCount,
     teamHours: { logged: teamLogged, target: TEAM_HOURS_TARGET },
     teamHoursWeekLabel: week === 0 ? 'this week' : 'last week',
     selectedAssignedTasks: selectedTasks,
+    // Routes EVERY team-scoped card through the picker. Unassigned tasks
+    // stay global on purpose — see buildTeamMetrics for rationale.
+    selectedUserIds: selectedTeamIds,
   });
 
   return (

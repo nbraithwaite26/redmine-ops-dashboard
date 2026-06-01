@@ -7,13 +7,23 @@ import TeamMemberSelector from './TeamMemberSelector';
 import { aggregateHours, weekRange } from '../lib/hoursAggregate';
 import { findProjectByPath } from '../lib/projectTree';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
-import { getProjects, getTeamSchedule, getTimeEntries } from '../services/redmineApi';
 import {
-  defaultSelectedUserIds,
+  getGroup,
+  getGroups,
+  getProjects,
+  getTeamSchedule,
+  getTimeEntries,
+} from '../services/redmineApi';
+import {
+  defaultSelectedForWorkspace,
   loadSelection,
-  saveSelection,
 } from '../lib/teamSelection';
-import type { Issue, TimeEntry, User } from '../types/redmine';
+import { useWorkspace } from '../hooks/useWorkspace';
+import { useSelectedTeam } from '../hooks/useSelectedTeam';
+import type { GroupSummary, Issue, TimeEntry, User } from '../types/redmine';
+
+/** The "(eng) Aircraft" team — the engineering-workspace default source. */
+const AIRCRAFT_GROUP_ID = 122;
 
 export type WeekOffset = 0 | -1;
 
@@ -61,9 +71,18 @@ export default function TeamWorkPanel({
   const [issues, setIssues] = useState<Issue[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  // null = not yet initialized from storage/defaults.
-  const [selectedIds, setSelectedIds] = useState<number[] | null>(null);
+  // Team selection lives in a shared hook so every team-scoped metric across
+  // the site sees the same value. The panel is the WRITER; everywhere else
+  // is a read-only consumer. `null` here means we haven't initialized yet.
+  const { selectedIds, setSelectedIds } = useSelectedTeam();
   const [openId, setOpenId] = useState<number | null>(null);
+
+  const { workspace } = useWorkspace();
+  // (eng) Aircraft group member IDs, used to compute the engineering
+  // workspace's default selection. Null until the fetch resolves.
+  const [aircraftMemberIds, setAircraftMemberIds] = useState<Set<number> | null>(null);
+  // The full group catalog for the picker dropdown.
+  const [groupCatalog, setGroupCatalog] = useState<GroupSummary[]>([]);
 
   // Roster + issues load once (independent of the selected week).
   useEffect(() => {
@@ -76,6 +95,32 @@ export default function TeamWorkPanel({
       setUsers(schedule.users);
       setIssues(schedule.issues);
       setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Group catalog + (eng) Aircraft membership for the engineering default.
+  // Both are cheap (single fetches, server-cached). If either fails, the
+  // workspace default just falls back to the name/login heuristic.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [cat, aircraft] = await Promise.all([
+          getGroups(),
+          getGroup(AIRCRAFT_GROUP_ID),
+        ]);
+        if (cancelled) return;
+        setGroupCatalog(cat);
+        setAircraftMemberIds(new Set(aircraft.members.map((u) => u.id)));
+      } catch {
+        if (!cancelled) {
+          setGroupCatalog([]);
+          setAircraftMemberIds(new Set());
+        }
+      }
     })();
     return () => {
       cancelled = true;
@@ -102,21 +147,29 @@ export default function TeamWorkPanel({
     [users, issues, entries, range],
   );
 
-  // Initialize selection once the roster lands: persisted choice (pruned to
-  // engineers that still exist) wins, else the first-name/login defaults.
+  // Initialize / re-initialize selection whenever the workspace changes.
+  // Per-workspace persisted choice wins (pruned to engineers that still
+  // exist); otherwise apply the workspace-aware default (eng → (eng) Aircraft
+  // intersection, ops → everyone).
+  //
+  // Wait for the aircraft-group fetch to resolve before computing the eng
+  // default — otherwise the very first paint would fall back to the legacy
+  // name/login heuristic and then re-render. For 'ops' the group isn't
+  // needed, so don't block on it.
   useEffect(() => {
     if (rows.length === 0) return;
-    setSelectedIds((prev) => {
-      if (prev !== null) return prev;
-      const roster = rows.map((r) => r.user);
-      const stored = loadSelection();
-      if (stored) {
-        const valid = stored.filter((id) => rows.some((r) => r.user.id === id));
-        return valid.length > 0 ? valid : defaultSelectedUserIds(roster);
+    if (workspace === 'eng' && aircraftMemberIds === null) return;
+    const roster = rows.map((r) => r.user);
+    const stored = loadSelection(workspace);
+    if (stored) {
+      const valid = stored.filter((id) => rows.some((r) => r.user.id === id));
+      if (valid.length > 0) {
+        setSelectedIds(valid);
+        return;
       }
-      return defaultSelectedUserIds(roster);
-    });
-  }, [rows]);
+    }
+    setSelectedIds(defaultSelectedForWorkspace(workspace, roster, aircraftMemberIds));
+  }, [rows, workspace, aircraftMemberIds]);
 
   const effectiveSelected = useMemo(() => selectedIds ?? [], [selectedIds]);
   const visibleRows = useMemo(
@@ -153,9 +206,30 @@ export default function TeamWorkPanel({
   }, [visibleTasksTotal, onSelectedTasksChange]);
 
   const updateSelection = (ids: number[]) => {
+    // useSelectedTeam.setSelectedIds writes localStorage + broadcasts to
+    // every other team-scoped consumer (Dashboard, Home, …) so this is
+    // the only call site needed.
     setSelectedIds(ids);
-    saveSelection(ids);
     if (openId !== null && !ids.includes(openId)) setOpenId(null);
+  };
+
+  // Apply a Redmine group as the active team: intersect group members with
+  // the visible roster so we don't show engineers without assigned work.
+  const applyGroup = async (groupId: number) => {
+    try {
+      const g = await getGroup(groupId);
+      const memberIds = new Set(g.members.map((u) => u.id));
+      const intersected = rows
+        .map((r) => r.user.id)
+        .filter((id) => memberIds.has(id));
+      // If nobody in the group has tracked work this week, fall back to the
+      // unfiltered group members so the picker has visible effect.
+      updateSelection(
+        intersected.length > 0 ? intersected : [...memberIds],
+      );
+    } catch {
+      // Toast surfaces from the HTTP layer; selection stays unchanged.
+    }
   };
 
   return (
@@ -200,6 +274,38 @@ export default function TeamWorkPanel({
                 Last week
               </button>
             </div>
+            {groupCatalog.length > 0 && (
+              <label className="text-sm">
+                <span className="sr-only">Team source group</span>
+                <select
+                  data-testid="team-group-picker"
+                  aria-label="Team source group"
+                  // Native <option> popups inherit the page background. In
+                  // dark mode that leaves the panel white-on-white without
+                  // `color-scheme: dark`. Setting it to "light dark" lets the
+                  // OS render the popup against the current theme.
+                  style={{ colorScheme: 'light dark' }}
+                  className="rounded-md border border-gray-200 dark:border-white/20 bg-[var(--bg-card)] text-ink px-2 py-1.5 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (Number.isFinite(id) && id > 0) {
+                      void applyGroup(id);
+                    }
+                    // Reset the picker — the active selection is reflected
+                    // through TeamMemberSelector and the card grid, not here.
+                    e.currentTarget.value = '';
+                  }}
+                >
+                  <option value="">Set team to…</option>
+                  {groupCatalog.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <TeamMemberSelector
               users={rows.map((r) => r.user)}
               selected={effectiveSelected}

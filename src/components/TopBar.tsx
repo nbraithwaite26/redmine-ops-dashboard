@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import type { EffectiveTheme } from '../hooks/useTheme';
+import { useWorkspace } from '../hooks/useWorkspace';
 
 interface Props {
   apiConnected: boolean;
@@ -48,6 +49,10 @@ export default function TopBar({
   const logoSrc = `${import.meta.env.BASE_URL}${logoFile}`;
   const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set());
   const logoFailed = failedLogos.has(logoFile);
+
+  const { workspace, workspaces } = useWorkspace();
+  const workspaceLabel =
+    workspaces.find((w) => w.id === workspace)?.label ?? 'Workspace';
 
   return (
     <header
@@ -109,8 +114,21 @@ export default function TopBar({
 
       <div className="flex-1 flex justify-center min-w-0">
         <div className="bg-white/95 rounded-full px-3 py-1.5 flex items-center gap-2 w-full max-w-[440px] min-w-0 shadow-sm">
-          <span className="hidden md:inline-block px-2 py-0.5 rounded-full bg-brand-100 text-ink text-xs font-medium whitespace-nowrap">
-            Service Operations Workspace
+          {/*
+            The search bar's outer container is always white (`bg-white/95`)
+            regardless of theme, so the pill sits on a light surface in BOTH
+            modes. Earlier we used `text-ink` which becomes near-white in dark
+            mode → invisible on the brand-yellow pill. Pin the text color to
+            the brand's dark-on-yellow value (#1F2937) explicitly so the pill
+            stays legible no matter what.
+          */}
+          <span
+            className="hidden md:inline-block px-2 py-0.5 rounded-full bg-brand-100 text-xs font-medium whitespace-nowrap"
+            style={{ color: '#1f2937' }}
+            data-testid="topbar-workspace-pill"
+            title={workspaceLabel}
+          >
+            {workspaceLabel}
           </span>
           <Search size={14} className="text-ink-muted shrink-0" />
           <input

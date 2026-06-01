@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '../components/DashboardCard';
 import RecentlyOpenedGrid from '../components/RecentlyOpenedGrid';
@@ -21,10 +21,14 @@ import {
   getMyIssues,
   getPastDueIssues,
   getTeamHours,
+  getTimeEntries,
   getWeeklyHours,
 } from '../services/redmineApi';
 import { buildDashboardMetrics } from '../data/mockData';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useWorkspace } from '../hooks/useWorkspace';
+import { useSelectedTeam } from '../hooks/useSelectedTeam';
+import { weekRange } from '../lib/hoursAggregate';
 
 const recentlyOpenedWorkspaces: RecentItem[] = [
   { id: 'my-tasks', title: 'My Tasks', type: 'Workspace', description: 'Assigned task queue.', to: '/tasks' },
@@ -68,37 +72,66 @@ const HOME_METRIC_IDS = new Set([
 export default function Home() {
   const navigate = useNavigate();
   const { user: currentUser, loading: userLoading } = useCurrentUser();
+  const { workspace, setWorkspace, workspaces } = useWorkspace();
+  const { selectedIds: selectedTeamIds } = useSelectedTeam();
   const [myIssues, setMyIssues] = useState<Issue[]>([]);
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
   const [weekly, setWeekly] = useState({ logged: 0, target: 40 });
   const [team, setTeam] = useState({ logged: 0, target: 360 });
+  // Raw time entries for THIS week — when a team is selected we re-aggregate
+  // from these instead of using the org-wide getTeamHours total.
+  const [weekEntries, setWeekEntries] = useState<
+    { hours: number; user: { id: number } }[]
+  >([]);
 
   useEffect(() => {
     if (userLoading) return;
     (async () => {
+      const wr = weekRange(0);
       // currentUser?.id is undefined → backend defaults to "me" (the API key holder)
-      const [m, a, pd, w, t] = await Promise.all([
+      const [m, a, pd, w, t, entries] = await Promise.all([
         getMyIssues(currentUser?.id),
         getIssues(),
         getPastDueIssues(),
         getWeeklyHours(currentUser?.id),
         getTeamHours(),
+        getTimeEntries({ from: wr.from, to: wr.to }),
       ]);
       setMyIssues(m);
       setAllIssues(a);
       setPastDue(pd);
       setWeekly(w);
       setTeam(t);
+      setWeekEntries(entries);
     })();
   }, [userLoading, currentUser?.id]);
+
+  // Team-scoped past-due count: re-filter when a team is active so the
+  // headline card matches the Dashboard's "Team past due".
+  const teamScopedPastDueCount = useMemo(() => {
+    if (!selectedTeamIds) return pastDue.length;
+    const ids = new Set(selectedTeamIds);
+    return pastDue.filter((i) => i.assignee && ids.has(i.assignee.id)).length;
+  }, [pastDue, selectedTeamIds]);
+
+  // Team-scoped team-hours: sum only the selected engineers' entries this
+  // week. Without a selection we fall back to the org-wide getTeamHours().
+  const teamScopedHours = useMemo(() => {
+    if (!selectedTeamIds) return team;
+    const ids = new Set(selectedTeamIds);
+    const logged = weekEntries
+      .filter((e) => ids.has(e.user.id))
+      .reduce((sum, e) => sum + e.hours, 0);
+    return { logged: Math.round(logged * 10) / 10, target: team.target };
+  }, [selectedTeamIds, weekEntries, team]);
 
   const headlineMetrics = buildDashboardMetrics({
     myIssues,
     allIssues,
-    pastDueCount: pastDue.length,
+    pastDueCount: teamScopedPastDueCount,
     weeklyHours: weekly,
-    teamHours: team,
+    teamHours: teamScopedHours,
   }).filter((m) => HOME_METRIC_IDS.has(m.id));
 
   return (
@@ -125,12 +158,24 @@ export default function Home() {
           <label className="text-sm">
             <span className="sr-only">Active workspace</span>
             <select
-              defaultValue="ops"
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value as typeof workspace)}
               aria-label="Active workspace"
+              data-testid="workspace-select"
+              // Native <option> elements inherit from the page background. In
+              // dark mode that was rendering invisible white-on-white panels —
+              // the explicit color-scheme keeps the popup readable in both
+              // modes (browser picks dark-themed options when the select is
+              // dark-themed). The `bg-[var(--bg-card)]` on the closed control
+              // also matches the rest of the surface.
+              style={{ colorScheme: 'light dark' }}
               className="rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-300"
             >
-              <option value="ops">Service Operations Workspace</option>
-              <option value="eng">Engineering Workspace</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>
