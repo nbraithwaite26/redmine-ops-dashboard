@@ -18,12 +18,10 @@ import {
   defaultSelectedForWorkspace,
   loadSelection,
 } from '../lib/teamSelection';
+import { useAircraftGroupMembers } from '../hooks/useAircraftGroupMembers';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useSelectedTeam } from '../hooks/useSelectedTeam';
 import type { GroupSummary, Issue, TimeEntry, User } from '../types/redmine';
-
-/** The "(eng) Aircraft" team — the engineering-workspace default source. */
-const AIRCRAFT_GROUP_ID = 122;
 
 export type WeekOffset = 0 | -1;
 
@@ -78,9 +76,10 @@ export default function TeamWorkPanel({
   const [openId, setOpenId] = useState<number | null>(null);
 
   const { workspace } = useWorkspace();
-  // (eng) Aircraft group member IDs, used to compute the engineering
-  // workspace's default selection. Null until the fetch resolves.
-  const [aircraftMemberIds, setAircraftMemberIds] = useState<Set<number> | null>(null);
+  // (eng) Aircraft group member IDs — used to compute the engineering
+  // workspace's default selection. Shared with the Engineers Out card on
+  // the Dashboard via this hook so we don't double-fetch.
+  const { memberIds: aircraftMemberIds } = useAircraftGroupMembers();
   // The full group catalog for the picker dropdown.
   const [groupCatalog, setGroupCatalog] = useState<GroupSummary[]>([]);
 
@@ -101,25 +100,17 @@ export default function TeamWorkPanel({
     };
   }, []);
 
-  // Group catalog + (eng) Aircraft membership for the engineering default.
-  // Both are cheap (single fetches, server-cached). If either fails, the
-  // workspace default just falls back to the name/login heuristic.
+  // Group catalog for the picker dropdown. (eng) Aircraft membership is
+  // handled by useAircraftGroupMembers above so the Engineers Out card and
+  // this panel share the same fetch.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [cat, aircraft] = await Promise.all([
-          getGroups(),
-          getGroup(AIRCRAFT_GROUP_ID),
-        ]);
-        if (cancelled) return;
-        setGroupCatalog(cat);
-        setAircraftMemberIds(new Set(aircraft.members.map((u) => u.id)));
+        const cat = await getGroups();
+        if (!cancelled) setGroupCatalog(cat);
       } catch {
-        if (!cancelled) {
-          setGroupCatalog([]);
-          setAircraftMemberIds(new Set());
-        }
+        if (!cancelled) setGroupCatalog([]);
       }
     })();
     return () => {

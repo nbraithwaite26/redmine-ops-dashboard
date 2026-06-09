@@ -6,6 +6,17 @@ Status: 📥 collected · 📝 planned · 🛠 in progress · ✅ shipped (then 
 
 ---
 
+## #34 — Multi-row Kanban (Dashboard › Resource Planning)
+
+📥 Collected. The engineer-column Kanban on the Dashboard's Resource Planning
+tab currently lays columns out in a single row via CSS Grid `auto-fit`. With a
+large selected team, the row gets dense and each column is short. Extend the
+layout so engineers can break across multiple rows — for example, group by
+workspace/sub-team or simply wrap at N columns per row — and let each column
+grow taller so the project cards inside breathe. Open question: do rows split
+by sub-team (e.g. one row for Software, one for Hardware) or just wrap evenly?
+Pairs with #31 perf work since denser rows benefit from windowed rendering.
+
 ## #33 — Outbound API keys for external programs
 
 📥 Collected. Turn `/api/redmine/*` into a re-usable proxy authenticated by dashboard-issued keys, so scripts/Zapier/n8n send `Authorization: Bearer <dashboard-key>` and the backend forwards with the server-side upstream key. Hashed at rest, per-key `read`/`write` scopes, admin-gated mint/revoke UI, audit hooks reuse the existing history log. Pairs with #30 and #32. Open question: mirror `/api/v1/redmine/*` 1:1 or curate a smaller verb set (default: mirror).

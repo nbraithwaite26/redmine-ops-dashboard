@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Plus, Users } from 'lucide-react';
 import CreateIssueModal from '../components/CreateIssueModal';
 import GroupedTaskTable from '../components/GroupedTaskTable';
-import IssueTable from '../components/IssueTable';
+import MyTasksByProject from '../components/MyTasksByProject';
 import QuickEditPopup from '../components/QuickEditPopup';
 import TicketDrawer from '../components/TicketDrawer';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -119,7 +119,7 @@ export default function Tasks() {
 
       <section>
         <h2 className="text-lg font-semibold mb-2">My tasks</h2>
-        <IssueTable
+        <MyTasksByProject
           title="Assigned to me"
           issues={myIssues}
           onOpenIssue={setOpenIssue}

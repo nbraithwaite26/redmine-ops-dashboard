@@ -4,14 +4,13 @@ import { FolderKanban, X } from 'lucide-react';
 import { getIssuesByProject } from '../services/redmineApi';
 import { isOverdue, stripHtml, today } from '../lib/format';
 import { initials } from '../lib/avatar';
+import { projectColor } from '../lib/projectColor';
 import type { Issue, Project } from '../types/redmine';
 
 interface Props {
   project: Project;
   onClose: () => void;
 }
-
-const HERO = 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)';
 
 /**
  * Full-screen task list for one project. Morphs out of the tapped ProjectCard
@@ -61,6 +60,7 @@ export default function ProjectDetail({ project, onClose }: Props) {
         };
 
   const openCount = tasks.filter((t) => t.status !== 'Closed' && t.status !== 'Rejected').length;
+  const color = projectColor(project.name, project.id);
 
   return (
     <div
@@ -95,7 +95,8 @@ export default function ProjectDetail({ project, onClose }: Props) {
         {/* Hero */}
         <div
           className="relative shrink-0 px-5 pb-5 text-white"
-          style={{ background: HERO, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}
+          style={{ background: color.gradient, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}
+          data-project-tone={color.tone}
         >
           {!reduce && (
             <div

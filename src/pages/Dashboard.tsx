@@ -16,6 +16,7 @@ import { buildTeamMetrics } from '../data/mockData';
 import { weekRange } from '../lib/hoursAggregate';
 import { distinctEngineersOut } from '../lib/timeOff';
 import { today } from '../lib/format';
+import { useAircraftGroupMembers } from '../hooks/useAircraftGroupMembers';
 import { useSelectedTeam } from '../hooks/useSelectedTeam';
 
 // Team-first Overview. Personal work (my tasks / my hours) now lives on the
@@ -46,6 +47,11 @@ export default function Dashboard() {
   // signal to `buildTeamMetrics` to show the legacy org-wide numbers
   // (rather than collapse to zero before the picker has loaded).
   const { selectedIds: selectedTeamIds } = useSelectedTeam();
+  // The Engineers Out card is pinned to the "(eng) Aircraft" Redmine group
+  // (not the user's team picker), per product spec — it should always reflect
+  // the engineering team's time-off calendar regardless of what's selected.
+  const { memberIds: aircraftMemberIds, count: aircraftHeadcount } =
+    useAircraftGroupMembers();
 
   // Issue counts are not week-scoped — load once.
   useEffect(() => {
@@ -73,22 +79,26 @@ export default function Dashboard() {
   }, [range.from, range.to]);
 
   // Engineers out in the selected week (drives the Engineers-out card).
-  // When a team selection is active, filter the time-off entries down to
-  // that subset so the card reflects "engineers in MY team who are out".
+  // Scoped to the (eng) Aircraft Redmine group, NOT the team picker — the
+  // card represents the engineering team's time-off calendar specifically.
+  // While `aircraftMemberIds` is null (initial fetch in flight) we show 0
+  // rather than briefly counting everyone, then fill in once it resolves.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const off = await getTimeOff({ from: range.from, to: range.to });
       if (cancelled) return;
-      const scoped = selectedTeamIds
-        ? off.filter((e) => selectedTeamIds.includes(e.user.id))
-        : off;
+      if (!aircraftMemberIds) {
+        setOutCount(0);
+        return;
+      }
+      const scoped = off.filter((e) => aircraftMemberIds.has(e.user.id));
       setOutCount(distinctEngineersOut(scoped));
     })();
     return () => {
       cancelled = true;
     };
-  }, [range.from, range.to, selectedTeamIds]);
+  }, [range.from, range.to, aircraftMemberIds]);
 
   // Open issues due within the next 7 days (today inclusive).
   const dueThisWeekCount = useMemo(() => {
@@ -150,7 +160,9 @@ export default function Dashboard() {
                 <EngineersOutCard
                   key={metric.id}
                   outCount={outCount}
-                  total={Number(metric.value)}
+                  // Headcount is the (eng) Aircraft group size, not the picker
+                  // — keeps "X on the team" honest with the Out count above.
+                  total={aircraftHeadcount}
                   onSelect={() => setTimeOffOpen(true)}
                 />
               ) : (

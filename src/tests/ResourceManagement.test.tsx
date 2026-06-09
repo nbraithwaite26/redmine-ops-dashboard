@@ -46,6 +46,11 @@ describe('<ResourceManagement /> (default reorderable view)', () => {
       </MemoryRouter>,
     );
     await waitFor(() => screen.getByTestId('section-personal'));
+    expect(screen.getByTestId('section-personal')).toBeInTheDocument();
+    expect(screen.getByTestId('section-team')).toBeInTheDocument();
+    // Kanban now lives on the Dashboard's Resource Planning tab — not here.
+    expect(screen.queryByTestId('section-kanban')).not.toBeInTheDocument();
+
     const personalIdx = screen
       .getAllByText(/personal — my gantt|team — full workload/i)
       .findIndex((el) => el.textContent?.toLowerCase().includes('personal'));
@@ -65,9 +70,7 @@ describe('<ResourceManagement /> (default reorderable view)', () => {
     const orderAfter = screen
       .getAllByText(/personal — my gantt|team — full workload/i)
       .map((el) => el.textContent ?? '');
-    // The first occurrence should now be the Team title.
     expect(orderAfter[0]?.toLowerCase()).toContain('team');
-    // Persisted to localStorage.
     expect(window.localStorage.getItem('rod.resources.order')).toBe(
       JSON.stringify(['team', 'personal']),
     );

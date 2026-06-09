@@ -63,7 +63,7 @@ describe('<Dashboard /> (team-first)', () => {
     expect(await screen.findByTestId('category-card-stcs')).toBeInTheDocument();
   });
 
-  it('embeds the team Gantt on the Resource Planning tab', async () => {
+  it('embeds the engineer Kanban on the Resource Planning tab', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -71,6 +71,10 @@ describe('<Dashboard /> (team-first)', () => {
     );
     fireEvent.click(screen.getByTestId('dashboard-tab-Resource Planning'));
     expect(await screen.findByText('Team workload')).toBeInTheDocument();
+    // The Kanban board mounts as soon as the schedule resolves.
+    await waitFor(() =>
+      expect(screen.getByTestId('kanban-board')).toBeInTheDocument(),
+    );
   });
 
   it('navigates to Past Due when the team past-due card is clicked', async () => {
