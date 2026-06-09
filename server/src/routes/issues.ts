@@ -11,6 +11,7 @@ import type {
 import type { AppEnv } from '../types/appVars.js';
 
 const LIST_TTL_MS = 60_000;
+const LIST_STALE_MS = 10 * 60_000; // serve stale while warmer/refresh runs
 const DETAIL_TTL_MS = 10_000;
 
 /** Drop everything that could be stale after an issue write (CR #29). */
@@ -54,6 +55,7 @@ issues.get('/', async (c) => {
     cache: {
       key: keyFromParts('issues:list', { limit: q.limit, offset: q.offset, ...filters }),
       ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
     },
   });
 

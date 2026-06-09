@@ -7,13 +7,21 @@ import TeamMemberSelector from './TeamMemberSelector';
 import { aggregateHours, weekRange } from '../lib/hoursAggregate';
 import { findProjectByPath } from '../lib/projectTree';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
-import { getProjects, getTeamSchedule, getTimeEntries } from '../services/redmineApi';
 import {
-  defaultSelectedUserIds,
+  getGroup,
+  getGroups,
+  getProjects,
+  getTeamSchedule,
+  getTimeEntries,
+} from '../services/redmineApi';
+import {
+  defaultSelectedForWorkspace,
   loadSelection,
-  saveSelection,
 } from '../lib/teamSelection';
-import type { Issue, TimeEntry, User } from '../types/redmine';
+import { useAircraftGroupMembers } from '../hooks/useAircraftGroupMembers';
+import { useWorkspace } from '../hooks/useWorkspace';
+import { useSelectedTeam } from '../hooks/useSelectedTeam';
+import type { GroupSummary, Issue, TimeEntry, User } from '../types/redmine';
 
 export type WeekOffset = 0 | -1;
 
@@ -21,6 +29,18 @@ interface Props {
   /** Controlled week selection. When omitted, the panel manages its own. */
   week?: WeekOffset;
   onWeekChange?: (week: WeekOffset) => void;
+  /**
+   * Fires whenever the visible-engineer total changes. Lets the parent
+   * Dashboard scope its "Team hours" metric to the same engineers shown
+   * in the picker, so the card reflects exactly what's on screen.
+   */
+  onSelectedHoursChange?: (totalHours: number) => void;
+  /**
+   * Fires whenever the count of tasks assigned to the visible engineers
+   * changes. Same idea as onSelectedHoursChange but for the assigned-
+   * tasks metric.
+   */
+  onSelectedTasksChange?: (totalTasks: number) => void;
 }
 
 /**
@@ -33,7 +53,12 @@ interface Props {
  * in the selected week (this / last), computed from time entries via
  * aggregateHours — the same week-scoped aggregation the Hours page uses.
  */
-export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = {}) {
+export default function TeamWorkPanel({
+  week: weekProp,
+  onWeekChange,
+  onSelectedHoursChange,
+  onSelectedTasksChange,
+}: Props = {}) {
   // Controlled by the parent when props are supplied; otherwise self-managed.
   const [weekState, setWeekState] = useState<WeekOffset>(0);
   const week = weekProp ?? weekState;
@@ -44,9 +69,19 @@ export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = 
   const [issues, setIssues] = useState<Issue[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  // null = not yet initialized from storage/defaults.
-  const [selectedIds, setSelectedIds] = useState<number[] | null>(null);
+  // Team selection lives in a shared hook so every team-scoped metric across
+  // the site sees the same value. The panel is the WRITER; everywhere else
+  // is a read-only consumer. `null` here means we haven't initialized yet.
+  const { selectedIds, setSelectedIds } = useSelectedTeam();
   const [openId, setOpenId] = useState<number | null>(null);
+
+  const { workspace } = useWorkspace();
+  // (eng) Aircraft group member IDs — used to compute the engineering
+  // workspace's default selection. Shared with the Engineers Out card on
+  // the Dashboard via this hook so we don't double-fetch.
+  const { memberIds: aircraftMemberIds } = useAircraftGroupMembers();
+  // The full group catalog for the picker dropdown.
+  const [groupCatalog, setGroupCatalog] = useState<GroupSummary[]>([]);
 
   // Roster + issues load once (independent of the selected week).
   useEffect(() => {
@@ -59,6 +94,24 @@ export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = 
       setUsers(schedule.users);
       setIssues(schedule.issues);
       setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Group catalog for the picker dropdown. (eng) Aircraft membership is
+  // handled by useAircraftGroupMembers above so the Engineers Out card and
+  // this panel share the same fetch.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cat = await getGroups();
+        if (!cancelled) setGroupCatalog(cat);
+      } catch {
+        if (!cancelled) setGroupCatalog([]);
+      }
     })();
     return () => {
       cancelled = true;
@@ -85,21 +138,29 @@ export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = 
     [users, issues, entries, range],
   );
 
-  // Initialize selection once the roster lands: persisted choice (pruned to
-  // engineers that still exist) wins, else the first-name/login defaults.
+  // Initialize / re-initialize selection whenever the workspace changes.
+  // Per-workspace persisted choice wins (pruned to engineers that still
+  // exist); otherwise apply the workspace-aware default (eng → (eng) Aircraft
+  // intersection, ops → everyone).
+  //
+  // Wait for the aircraft-group fetch to resolve before computing the eng
+  // default — otherwise the very first paint would fall back to the legacy
+  // name/login heuristic and then re-render. For 'ops' the group isn't
+  // needed, so don't block on it.
   useEffect(() => {
     if (rows.length === 0) return;
-    setSelectedIds((prev) => {
-      if (prev !== null) return prev;
-      const roster = rows.map((r) => r.user);
-      const stored = loadSelection();
-      if (stored) {
-        const valid = stored.filter((id) => rows.some((r) => r.user.id === id));
-        return valid.length > 0 ? valid : defaultSelectedUserIds(roster);
+    if (workspace === 'eng' && aircraftMemberIds === null) return;
+    const roster = rows.map((r) => r.user);
+    const stored = loadSelection(workspace);
+    if (stored) {
+      const valid = stored.filter((id) => rows.some((r) => r.user.id === id));
+      if (valid.length > 0) {
+        setSelectedIds(valid);
+        return;
       }
-      return defaultSelectedUserIds(roster);
-    });
-  }, [rows]);
+    }
+    setSelectedIds(defaultSelectedForWorkspace(workspace, roster, aircraftMemberIds));
+  }, [rows, workspace, aircraftMemberIds]);
 
   const effectiveSelected = useMemo(() => selectedIds ?? [], [selectedIds]);
   const visibleRows = useMemo(
@@ -111,10 +172,55 @@ export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = 
     [rows, openId],
   );
 
+  // Totals across only the currently-visible (selected) engineers.
+  // Reported up so the Dashboard's "Team hours" and "Assigned tasks"
+  // metrics scope to the same set the picker is showing.
+  const visibleHoursTotal = useMemo(
+    () =>
+      Math.round(
+        visibleRows.reduce((sum, r) => sum + r.totalHours, 0) * 10,
+      ) / 10,
+    [visibleRows],
+  );
+
+  const visibleTasksTotal = useMemo(
+    () => visibleRows.reduce((sum, r) => sum + r.taskCount, 0),
+    [visibleRows],
+  );
+
+  useEffect(() => {
+    onSelectedHoursChange?.(visibleHoursTotal);
+  }, [visibleHoursTotal, onSelectedHoursChange]);
+
+  useEffect(() => {
+    onSelectedTasksChange?.(visibleTasksTotal);
+  }, [visibleTasksTotal, onSelectedTasksChange]);
+
   const updateSelection = (ids: number[]) => {
+    // useSelectedTeam.setSelectedIds writes localStorage + broadcasts to
+    // every other team-scoped consumer (Dashboard, Home, …) so this is
+    // the only call site needed.
     setSelectedIds(ids);
-    saveSelection(ids);
     if (openId !== null && !ids.includes(openId)) setOpenId(null);
+  };
+
+  // Apply a Redmine group as the active team: intersect group members with
+  // the visible roster so we don't show engineers without assigned work.
+  const applyGroup = async (groupId: number) => {
+    try {
+      const g = await getGroup(groupId);
+      const memberIds = new Set(g.members.map((u) => u.id));
+      const intersected = rows
+        .map((r) => r.user.id)
+        .filter((id) => memberIds.has(id));
+      // If nobody in the group has tracked work this week, fall back to the
+      // unfiltered group members so the picker has visible effect.
+      updateSelection(
+        intersected.length > 0 ? intersected : [...memberIds],
+      );
+    } catch {
+      // Toast surfaces from the HTTP layer; selection stays unchanged.
+    }
   };
 
   return (
@@ -159,6 +265,38 @@ export default function TeamWorkPanel({ week: weekProp, onWeekChange }: Props = 
                 Last week
               </button>
             </div>
+            {groupCatalog.length > 0 && (
+              <label className="text-sm">
+                <span className="sr-only">Team source group</span>
+                <select
+                  data-testid="team-group-picker"
+                  aria-label="Team source group"
+                  // Native <option> popups inherit the page background. In
+                  // dark mode that leaves the panel white-on-white without
+                  // `color-scheme: dark`. Setting it to "light dark" lets the
+                  // OS render the popup against the current theme.
+                  style={{ colorScheme: 'light dark' }}
+                  className="rounded-md border border-gray-200 dark:border-white/20 bg-[var(--bg-card)] text-ink px-2 py-1.5 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (Number.isFinite(id) && id > 0) {
+                      void applyGroup(id);
+                    }
+                    // Reset the picker — the active selection is reflected
+                    // through TeamMemberSelector and the card grid, not here.
+                    e.currentTarget.value = '';
+                  }}
+                >
+                  <option value="">Set team to…</option>
+                  {groupCatalog.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <TeamMemberSelector
               users={rows.map((r) => r.user)}
               selected={effectiveSelected}

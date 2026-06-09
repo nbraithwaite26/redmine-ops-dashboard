@@ -12,6 +12,8 @@ import usersRoute from './routes/users.js';
 import projectsRoute from './routes/projects.js';
 import issuesRoute from './routes/issues.js';
 import timeEntriesRoute from './routes/timeEntries.js';
+import timeOffRoute from './routes/timeOff.js';
+import groupsRoute from './routes/groups.js';
 import metadataRoute from './routes/metadata.js';
 import ganttRoute from './routes/gantt.js';
 import authRoute from './routes/auth.js';
@@ -65,9 +67,11 @@ api.get('/health', (c) =>
 
 api.route('/me', meRoute);
 api.route('/users', usersRoute);
+api.route('/groups', groupsRoute);
 api.route('/projects', projectsRoute);
 api.route('/issues', issuesRoute);
 api.route('/time-entries', timeEntriesRoute);
+api.route('/time-off', timeOffRoute);
 api.route('/metadata', metadataRoute);
 api.route('/gantt', ganttRoute);
 
@@ -97,7 +101,13 @@ serve({ fetch: app.fetch, port: config.port }, (info) => {
   if (config.cache.warmEnabled) {
     startWarmer({
       request: async (path) =>
-        app.fetch(new Request(`http://localhost:${info.port}${path}`)),
+        app.fetch(
+          new Request(`http://localhost:${info.port}${path}`, {
+            // Bypass the rate limiter so the warmer doesn't eat the
+            // user's per-IP quota during paginated walks.
+            headers: { 'x-internal-warmer': '1' },
+          }),
+        ),
       intervalMs: config.cache.warmIntervalMs,
       onError: (taskName, err) => {
         const msg = err instanceof Error ? err.message : String(err);

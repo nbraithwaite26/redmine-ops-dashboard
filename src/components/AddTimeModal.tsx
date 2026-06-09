@@ -2,17 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { Save, X } from 'lucide-react';
 import {
   getIssueById,
-  getIssues,
-  getProjects,
+  getMyIssues,
   getTimeActivities,
   getTimeEntries,
 } from '../services/redmineApi';
-import type { Issue, Project, TimeEntry } from '../types/redmine';
+import type { Issue, TimeEntry } from '../types/redmine';
+
+type ProjectOption = { id: number; name: string };
 import { useDialogA11y } from '../hooks/useDialogA11y';
 import { useTimeEntryActions } from '../hooks/useTimeEntryActions';
 import { useIssueActions } from '../hooks/useIssueActions';
 import { useReadOnly } from '../hooks/useReadOnly';
 import { formatHours } from '../lib/format';
+import {
+  sortByEngineeringPriority,
+  sortObjectsByEngineeringPriority,
+} from '../lib/engineeringOrder';
 
 interface Props {
   onClose: () => void;
@@ -40,9 +45,12 @@ interface Props {
  * each task row on the Hours page.
  *
  * Behavior contract (plan §1 — Add Time Entry):
- *   - Project dropdown sourced from real Redmine projects via getProjects().
- *   - Task/issue dropdown auto-populates with the selected project's
- *     issues. Switching the project resets the issue selection.
+ *   - Project + task dropdowns are scoped to the current user's own
+ *     assignments. Projects derive from the distinct projectIds across
+ *     getMyIssues(); the task list is the same set filtered by the
+ *     selected project. Pre-seeded or edited entries outside that scope
+ *     still hydrate (fallback fetch + synthetic option).
+ *   - Switching the project resets the issue selection.
  *   - No user dropdown — entries are always logged by the current user.
  *   - When a task is selected, the modal shows a small list of that
  *     task's existing time entries below the form ("Previous logs").
@@ -61,10 +69,12 @@ export default function AddTimeModal({
 
   // ─── State ──────────────────────────────────────────────────────────────
 
-  const [projects, setProjects] = useState<Project[]>([]);
+  // The engineer's assigned issues. Projects + task options derive from
+  // this single source so we make one upstream call instead of two.
+  const [myIssues, setMyIssues] = useState<Issue[]>([]);
   const [activities, setActivities] = useState<string[]>([]);
-  const [issuesForProject, setIssuesForProject] = useState<Issue[]>([]);
   const [pastEntries, setPastEntries] = useState<TimeEntry[]>([]);
+  const [loadingScope, setLoadingScope] = useState(true);
 
   const [projectId, setProjectId] = useState<number | null>(
     editing?.projectId ?? initialProjectId ?? null,
@@ -83,30 +93,58 @@ export default function AddTimeModal({
   const issueActions = useIssueActions();
   const { readOnly } = useReadOnly();
 
-  // ─── Initial load: projects, activities, and (if pre-seeded) the issue's
-  //                   project so the dropdowns hydrate correctly ───────────
+  // ─── Initial load: engineer's assigned issues + activities. Pre-seeded
+  //                   entries outside that set get merged so the dropdowns
+  //                   can hydrate the selected value. ─────────────────────
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [projectList, activityList] = await Promise.all([
-        getProjects(),
+      const [mine, activityList] = await Promise.all([
+        getMyIssues(),
         getTimeActivities(),
       ]);
       if (cancelled) return;
-      setProjects(projectList);
-      setActivities(activityList);
-      if (activityList.length > 0) setActivity((cur) => cur || activityList[0]!);
 
-      // If we got an initialIssueId without a project, look it up and seed
-      // the project dropdown from there.
-      if (initialIssueId && !initialProjectId) {
-        const issue = await getIssueById(initialIssueId);
+      // If the modal was opened against a specific issue the engineer is
+      // no longer assigned to (edit mode, or a teammate's task row), fetch
+      // that one issue and append it so the dropdown can still show it.
+      const seedIssueId = editing?.issueId ?? initialIssueId ?? null;
+      let merged = mine;
+      if (seedIssueId !== null && !mine.some((i) => i.id === seedIssueId)) {
+        const extra = await getIssueById(seedIssueId);
         if (cancelled) return;
-        if (issue) setProjectId(issue.projectId);
-      } else if (projectId === null && projectList.length > 0) {
-        setProjectId(projectList[0]!.id);
+        if (extra) merged = [...mine, extra];
       }
+
+      setMyIssues(merged);
+      // Reorder activities so Aircraft Engineering work surfaces first, then
+      // Custom Engineering Services + STCs, then other engineering, then the
+      // rest. See src/lib/engineeringOrder.ts for the bucket rules.
+      const orderedActivities = sortByEngineeringPriority(activityList);
+      setActivities(orderedActivities);
+      if (orderedActivities.length > 0) setActivity((cur) => cur || orderedActivities[0]!);
+
+      // Default the project dropdown when nothing was pre-seeded. Pick the
+      // highest-priority bucket — usually an AE project — so engineers land
+      // on the most-likely choice on open.
+      if (projectId === null) {
+        if (editing) setProjectId(editing.projectId);
+        else if (merged.length > 0) {
+          const seen = new Set<number>();
+          const opts: ProjectOption[] = [];
+          for (const i of merged) {
+            if (!seen.has(i.projectId)) {
+              seen.add(i.projectId);
+              opts.push({ id: i.projectId, name: i.projectName });
+            }
+          }
+          const sorted = sortObjectsByEngineeringPriority(opts);
+          if (sorted[0]) setProjectId(sorted[0].id);
+        }
+      }
+
+      setLoadingScope(false);
     })();
     return () => {
       cancelled = true;
@@ -114,24 +152,6 @@ export default function AddTimeModal({
     // Run once on open — pre-seed props are captured at mount time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ─── When the project changes, refresh the task list ───────────────────
-
-  useEffect(() => {
-    if (projectId === null) {
-      setIssuesForProject([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const all = await getIssues();
-      if (cancelled) return;
-      setIssuesForProject(all.filter((i) => i.projectId === projectId));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
 
   // ─── When the issue changes, refresh the past-entries panel ────────────
 
@@ -199,6 +219,33 @@ export default function AddTimeModal({
 
   // ─── Derived ────────────────────────────────────────────────────────────
 
+  // Distinct projects the engineer has at least one task in. Edit mode
+  // also keeps the entry's project even when the engineer no longer has
+  // tasks there, so the dropdown value stays selected. Ordered by the
+  // engineering-priority bucket rule so AE work surfaces first.
+  const projects = useMemo<ProjectOption[]>(() => {
+    const map = new Map<number, ProjectOption>();
+    for (const i of myIssues) {
+      if (!map.has(i.projectId)) {
+        map.set(i.projectId, { id: i.projectId, name: i.projectName });
+      }
+    }
+    if (editing && !map.has(editing.projectId)) {
+      map.set(editing.projectId, {
+        id: editing.projectId,
+        name: editing.projectName ?? `Project #${editing.projectId}`,
+      });
+    }
+    return sortObjectsByEngineeringPriority([...map.values()]);
+  }, [myIssues, editing]);
+
+  const issuesForProject = useMemo<Issue[]>(() => {
+    if (projectId === null) return [];
+    return myIssues
+      .filter((i) => i.projectId === projectId)
+      .sort((a, b) => a.id - b.id);
+  }, [myIssues, projectId]);
+
   const pastEntriesSummary = useMemo(() => {
     const total = pastEntries.reduce((s, e) => s + e.hours, 0);
     return { count: pastEntries.length, total };
@@ -265,7 +312,10 @@ export default function AddTimeModal({
               }}
               data-testid="add-time-project"
             >
-              {projects.length === 0 && <option value="">Loading…</option>}
+              {loadingScope && <option value="">Loading…</option>}
+              {!loadingScope && projects.length === 0 && (
+                <option value="">No assigned projects</option>
+              )}
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

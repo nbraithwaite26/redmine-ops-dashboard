@@ -12,6 +12,7 @@ import type { RedmineMembershipDto, RedmineProjectDto } from '../types/redmineDt
 const projects = new Hono();
 
 const LIST_TTL_MS = 60_000;
+const LIST_STALE_MS = 10 * 60_000;
 const DETAIL_TTL_MS = 60_000;
 
 // LIST: no include= on purpose (plan §6 Notes — not verified on list endpoint).
@@ -29,6 +30,7 @@ projects.get('/', async (c) => {
     cache: {
       key: keyFromParts('projects:list', { limit: q.limit, offset: q.offset }),
       ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
     },
   });
 
@@ -66,6 +68,7 @@ projects.get('/:id{[0-9]+}/members', async (c) => {
     cache: {
       key: keyFromParts('projects:members', { id, limit: q.limit, offset: q.offset }),
       ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
     },
   });
   return c.json(

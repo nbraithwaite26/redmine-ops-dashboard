@@ -12,21 +12,24 @@ interface Props {
   view?: 'personal' | 'team';
 }
 
+interface FilteredData {
+  users: User[];
+  issues: Issue[];
+  allocations: ResourceAllocation[];
+}
+
 interface SectionDef {
   id: string;
   title: string;
   subtitle?: string;
   filter: (
-    kind: { users: User[]; issues: Issue[]; allocations: ResourceAllocation[] },
+    kind: FilteredData,
     currentUserId: number | undefined,
-  ) => {
-    users: User[];
-    issues: Issue[];
-    allocations: ResourceAllocation[];
-  };
+  ) => FilteredData;
+  render: (data: FilteredData, loading: boolean) => JSX.Element;
 }
 
-const SECTIONS: SectionDef[] = [
+const TIMELINE_SECTIONS: SectionDef[] = [
   {
     id: 'personal',
     title: 'Personal — my Gantt',
@@ -39,14 +42,30 @@ const SECTIONS: SectionDef[] = [
         allocations: allocations.filter((a) => a.userId === currentUserId),
       };
     },
+    render: (data) => (
+      <ResourceTimeline
+        users={data.users}
+        issues={data.issues}
+        allocations={data.allocations}
+      />
+    ),
   },
   {
     id: 'team',
     title: 'Team — full workload',
     subtitle: 'Gantt across the whole team. Red bars indicate overload.',
     filter: (all) => all,
+    render: (data) => (
+      <ResourceTimeline
+        users={data.users}
+        issues={data.issues}
+        allocations={data.allocations}
+      />
+    ),
   },
 ];
+
+const SECTIONS: SectionDef[] = TIMELINE_SECTIONS;
 
 const DEFAULT_ORDER = SECTIONS.map((s) => s.id);
 
@@ -55,6 +74,7 @@ export default function ResourceManagement({ view }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [allocations, setAllocations] = useState<ResourceAllocation[]>([]);
+  const [dataLoading, setDataLoading] = useState<boolean>(true);
 
   const { order, moveUp, moveDown } = useSectionOrder({
     storageKey: 'rod.resources.order',
@@ -63,16 +83,30 @@ export default function ResourceManagement({ view }: Props) {
 
   useEffect(() => {
     if (userLoading) return;
-    (async () => {
-      const [u, i, a] = await Promise.all([
-        getUsers(),
-        getIssues(),
-        getResourceAllocations(),
-      ]);
-      setUsers(u);
-      setIssues(i);
-      setAllocations(a);
-    })();
+    let cancelled = false;
+    setDataLoading(true);
+    // Fire the three fetches independently. The Kanban only needs issues
+    // (it derives the roster from assignees when /users.json 403s for the
+    // non-admin key); the Gantt timelines need allocations too. Each
+    // .catch keeps one slow/failing fetch from blocking the others.
+    getUsers()
+      .then((u) => { if (!cancelled) setUsers(u); })
+      .catch(() => {});
+    getIssues()
+      .then((i) => {
+        if (cancelled) return;
+        setIssues(i);
+        setDataLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setDataLoading(false);
+      });
+    getResourceAllocations()
+      .then((a) => { if (!cancelled) setAllocations(a); })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [userLoading]);
 
   const visibleSections = useMemo(() => {
@@ -107,11 +141,7 @@ export default function ResourceManagement({ view }: Props) {
               onMoveUp={() => moveUp(section.id)}
               onMoveDown={() => moveDown(section.id)}
             >
-              <ResourceTimeline
-                users={filtered.users}
-                issues={filtered.issues}
-                allocations={filtered.allocations}
-              />
+              {section.render(filtered, dataLoading)}
             </ReorderableSection>
           );
         })}

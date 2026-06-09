@@ -16,9 +16,15 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-const RATE_PER_SECOND = 20;
-const BURST = 40;
+// Bumped from 20/40 once frontend list endpoints started paginating
+// internally — a single Dashboard load now fires ~38 sequential page
+// requests for /issues alone. 100/sec sustained / 200 burst leaves
+// comfortable headroom for the browser while still rejecting actual
+// abuse from a misconfigured client.
+const RATE_PER_SECOND = 100;
+const BURST = 200;
 const WINDOW_SECONDS = 1;
+const INTERNAL_HEADER = 'x-internal-warmer';
 // Redis branch uses fixed-window-per-second, so limit = burst keeps the
 // effective ceiling consistent with the in-memory token bucket.
 const REDIS_LIMIT_PER_WINDOW = BURST;
@@ -51,6 +57,14 @@ function rejected(c: import('hono').Context) {
 }
 
 export const rateLimit = (): MiddlewareHandler => async (c, next) => {
+  // Internal warmer requests bypass the rate limiter — they share the
+  // 'local' IP key with the browser and would otherwise cannibalize the
+  // user's quota during a paginated walk.
+  if (c.req.header(INTERNAL_HEADER)) {
+    await next();
+    return;
+  }
+
   const key = clientKey(c);
   const redis = await getRedis();
 

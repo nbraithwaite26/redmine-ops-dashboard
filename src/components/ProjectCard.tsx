@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { FolderKanban } from 'lucide-react';
 import type { Project } from '../types/redmine';
 import { stripHtml } from '../lib/format';
+import { projectColor } from '../lib/projectColor';
 
 interface Props {
   project: Project;
@@ -22,19 +23,21 @@ function statusPill(status: Project['status']): string {
  * morphs it into the full-screen task list (Framer Motion shared layout).
  */
 export default function ProjectCard({ project, open, total, onSelect }: Props) {
+  const color = projectColor(project.name, project.id);
   return (
     <motion.button
       type="button"
       layoutId={`project-card-${project.id}`}
       onClick={onSelect}
       whileTap={{ scale: 0.98 }}
-      style={{ borderRadius: 16 }}
+      style={{ borderRadius: 16, borderLeft: `4px solid ${color.hex}` }}
       className="card flex w-full flex-col p-4 text-left transition hover:border-gray-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-300"
       data-testid={`project-card-${project.id}`}
-      aria-label={`${project.name.trim()} — ${open} open of ${total} tasks. Tap to view tasks.`}
+      data-project-tone={color.tone}
+      aria-label={`${project.name.trim()} — ${color.label} project, ${open} open of ${total} tasks. Tap to view tasks.`}
     >
       <div className="flex items-center gap-2 text-ink-muted">
-        <FolderKanban size={18} />
+        <FolderKanban size={18} style={{ color: color.hex }} />
         <span className={statusPill(project.status) + ' ml-auto'}>{project.status}</span>
       </div>
       <div className="mt-2 font-semibold">{project.name.trim()}</div>

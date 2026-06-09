@@ -779,13 +779,31 @@ export function buildDashboardMetrics({
 interface TeamMetricInputs {
   /** Every issue across the team (all assignees). */
   allIssues: Issue[];
-  /** Count of overdue team issues. */
+  /** Overdue team issues (so we can re-filter by selected team). */
+  pastDueIssues?: Issue[];
+  /** Fallback when pastDueIssues isn't provided. */
   pastDueCount: number;
   /** Count of open team issues due within the next 7 days. */
   dueThisWeekCount: number;
   teamHours: { logged: number; target: number };
   /** Week label for the team-hours card title, e.g. "this week" / "last week". */
   teamHoursWeekLabel?: string;
+  /**
+   * Sum of tasks assigned to the engineers currently picked in the team-
+   * member selector. When provided, replaces the "In progress" card with
+   * an "Assigned tasks" card scoped to the selected engineers.
+   */
+  selectedAssignedTasks?: number;
+  /**
+   * When provided, every team-scoped metric below is filtered to issues
+   * whose assignee.id is in this list (so the cards reflect the picked
+   * team rather than the whole org). Unassigned-tasks is intentionally
+   * left global — those are by definition NOT in any team and we want
+   * them visible regardless of who's selected.
+   *
+   * Pass null/undefined to use the global counts (back-compat).
+   */
+  selectedUserIds?: ReadonlyArray<number> | null;
 }
 
 /**
@@ -794,49 +812,101 @@ interface TeamMetricInputs {
  * reflects the whole team: total tasks, in-progress, past-due, unassigned,
  * the engineer roster, and team hours. Engineers are derived from assignees
  * since /users 403s for the non-admin key.
+ *
+ * When `selectedUserIds` is supplied, each team-relevant card filters down
+ * to that subset. `team-unassigned` stays global (orphan tasks aren't in
+ * any team), and `team-hours-week` keeps using the pre-aggregated value
+ * since the caller already computes that against the visible engineers.
  */
 export function buildTeamMetrics({
   allIssues,
+  pastDueIssues,
   pastDueCount,
   dueThisWeekCount,
   teamHours,
   teamHoursWeekLabel = 'this week',
+  selectedAssignedTasks,
+  selectedUserIds,
 }: TeamMetricInputs): DashboardMetric[] {
-  const inProgressCount = allIssues.filter((i) => i.status === 'In Progress').length;
+  // When a team selection is active, filter the issue lists used by the
+  // team-scoped metrics. `selectedUserIds === null/undefined` ⇒ legacy
+  // org-wide behavior; `selectedUserIds === []` ⇒ "no team selected" ⇒
+  // the team-scoped counts collapse to zero (which is the honest answer).
+  const teamSet = selectedUserIds ? new Set(selectedUserIds) : null;
+  const inTeam = (issue: Issue): boolean =>
+    !teamSet || (issue.assignee !== null && teamSet.has(issue.assignee.id));
+
+  const teamIssues = teamSet ? allIssues.filter(inTeam) : allIssues;
+  const teamPastDueCount = teamSet
+    ? (pastDueIssues ?? []).filter(inTeam).length
+    : pastDueCount;
+  const teamDueThisWeekCount = teamSet
+    ? // Recompute due-this-week on the team-filtered issue list.
+      (() => {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const startIso = start.toISOString().slice(0, 10);
+        const endDate = new Date(start);
+        endDate.setDate(start.getDate() + 7);
+        const endIso = endDate.toISOString().slice(0, 10);
+        return teamIssues.filter(
+          (i) => !i.closedOn && i.dueDate && i.dueDate >= startIso && i.dueDate <= endIso,
+        ).length;
+      })()
+    : dueThisWeekCount;
+
+  const inProgressCount = teamIssues.filter((i) => i.status === 'In Progress').length;
+  // Orphan tasks stay org-wide on purpose — they belong to no team yet.
   const unassignedCount = allIssues.filter((i) => !i.assignee).length;
-  const waitingCount = allIssues.filter((i) => i.status === 'Feedback').length;
+  const waitingCount = teamIssues.filter((i) => i.status === 'Feedback').length;
   const engineerIds = new Set(
-    allIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
+    teamIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
   );
   const engineerCount = engineerIds.size;
+  const assignedCard: DashboardMetric =
+    selectedAssignedTasks !== undefined
+      ? {
+          id: 'team-assigned-tasks',
+          title: 'Tasks assigned',
+          value: selectedAssignedTasks,
+          progress: safePercent(
+            selectedAssignedTasks,
+            Math.max(selectedAssignedTasks, 1),
+          ),
+          statusLabel: 'To selected engineers',
+          statusColor: 'blue',
+          color: '#8B5CF6',
+          caption: 'open',
+        }
+      : {
+          id: 'team-in-progress',
+          title: 'In progress',
+          value: inProgressCount,
+          total: allIssues.length,
+          progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
+          statusLabel: 'Active work',
+          statusColor: 'blue',
+          color: '#8B5CF6',
+          caption: 'being worked',
+        };
 
   const cards: DashboardMetric[] = [
     {
       id: 'team-tasks',
       title: 'Team tasks',
-      value: allIssues.length,
-      progress: safePercent(allIssues.length, Math.max(allIssues.length, 50)),
-      statusLabel: 'All assignees',
+      value: teamIssues.length,
+      progress: safePercent(teamIssues.length, Math.max(teamIssues.length, 50)),
+      statusLabel: teamSet ? 'Selected team' : 'All assignees',
       statusColor: 'blue',
       color: '#3B82F6',
       caption: 'total open',
     },
-    {
-      id: 'team-in-progress',
-      title: 'In progress',
-      value: inProgressCount,
-      total: allIssues.length,
-      progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
-      statusLabel: 'Active work',
-      statusColor: 'blue',
-      color: '#8B5CF6',
-      caption: 'being worked',
-    },
+    assignedCard,
     {
       id: 'team-past-due',
       title: 'Team past due',
-      value: pastDueCount,
-      progress: safePercent(pastDueCount, Math.max(pastDueCount + 4, 10)),
+      value: teamPastDueCount,
+      progress: safePercent(teamPastDueCount, Math.max(teamPastDueCount + 4, 10)),
       statusLabel: 'Action needed',
       statusColor: 'red',
       color: '#EF4444',
@@ -870,7 +940,7 @@ export function buildTeamMetrics({
       title: 'Engineers',
       value: engineerCount,
       progress: 100,
-      statusLabel: 'With assigned work',
+      statusLabel: teamSet ? 'In selected team' : 'With assigned work',
       statusColor: 'green',
       color: '#10B981',
       caption: 'on the team',
@@ -878,8 +948,8 @@ export function buildTeamMetrics({
     {
       id: 'team-due-week',
       title: 'Due this week',
-      value: dueThisWeekCount,
-      progress: safePercent(dueThisWeekCount, Math.max(dueThisWeekCount, 10)),
+      value: teamDueThisWeekCount,
+      progress: safePercent(teamDueThisWeekCount, Math.max(teamDueThisWeekCount, 10)),
       statusLabel: 'Next 7 days',
       statusColor: 'blue',
       color: '#0EA5E9',

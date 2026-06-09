@@ -40,6 +40,23 @@ export interface User {
   roles: string[];
 }
 
+/**
+ * Redmine user group. Used as the team-picker source on the dashboard.
+ * `(eng) Aircraft` is the engineering default; the broader catalog lives
+ * server-side (see server/src/routes/groups.ts).
+ */
+export interface Group {
+  id: number;
+  name: string;
+  members: User[];
+}
+
+/** Catalog entry — group list endpoint returns just {id, name}. */
+export interface GroupSummary {
+  id: number;
+  name: string;
+}
+
 export interface CustomField {
   id: number;
   name: string;

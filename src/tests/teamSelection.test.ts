@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  defaultSelectedForWorkspace,
   defaultSelectedUserIds,
   firstName,
   loadSelection,
@@ -49,20 +50,65 @@ describe('defaultSelectedUserIds', () => {
   });
 });
 
-describe('selection persistence', () => {
+describe('defaultSelectedForWorkspace', () => {
+  it('eng: intersects the roster with the aircraft-group member set', () => {
+    const groupIds = new Set([1, 2, 4]); // Nigel, Jose, Mara
+    expect(
+      defaultSelectedForWorkspace('eng', roster, groupIds).sort(),
+    ).toEqual([1, 2, 4]);
+  });
+
+  it('eng: falls back to the legacy name default when no group is available', () => {
+    expect(
+      defaultSelectedForWorkspace('eng', roster, null).sort(),
+    ).toEqual(defaultSelectedUserIds(roster).sort());
+  });
+
+  it('eng: falls back to the legacy name default when the group intersection is empty', () => {
+    const groupIds = new Set<number>([999, 1000]); // none in roster
+    expect(
+      defaultSelectedForWorkspace('eng', roster, groupIds).sort(),
+    ).toEqual(defaultSelectedUserIds(roster).sort());
+  });
+
+  it('ops: selects EVERY engineer in the roster regardless of group', () => {
+    const groupIds = new Set([1]); // shouldn't matter for ops
+    expect(
+      defaultSelectedForWorkspace('ops', roster, groupIds).sort(),
+    ).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('selection persistence (per-workspace)', () => {
   afterEach(() => localStorage.clear());
 
-  it('round-trips a selection through localStorage', () => {
-    saveSelection([3, 7, 9]);
-    expect(loadSelection()).toEqual([3, 7, 9]);
+  it('round-trips a selection through localStorage for a workspace', () => {
+    saveSelection('eng', [3, 7, 9]);
+    expect(loadSelection('eng')).toEqual([3, 7, 9]);
+  });
+
+  it('keeps each workspace selection independent', () => {
+    saveSelection('eng', [1, 2, 3]);
+    saveSelection('ops', [4, 5, 6]);
+    expect(loadSelection('eng')).toEqual([1, 2, 3]);
+    expect(loadSelection('ops')).toEqual([4, 5, 6]);
   });
 
   it('returns null when nothing is stored', () => {
-    expect(loadSelection()).toBeNull();
+    expect(loadSelection('eng')).toBeNull();
+    expect(loadSelection('ops')).toBeNull();
   });
 
   it('returns null for malformed storage', () => {
-    localStorage.setItem('rod.team.selectedUserIds', '{not json');
-    expect(loadSelection()).toBeNull();
+    localStorage.setItem('rod.team.selectedUserIds.eng', '{not json');
+    expect(loadSelection('eng')).toBeNull();
+  });
+
+  it("migrates the pre-workspace 'rod.team.selectedUserIds' key into the 'eng' slot on first read", () => {
+    localStorage.setItem('rod.team.selectedUserIds', JSON.stringify([10, 20]));
+    expect(loadSelection('eng')).toEqual([10, 20]);
+    // Migration is one-shot — legacy key gone, eng key now holds the data.
+    expect(localStorage.getItem('rod.team.selectedUserIds')).toBeNull();
+    expect(loadSelection('eng')).toEqual([10, 20]);
   });
 });

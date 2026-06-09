@@ -225,6 +225,103 @@ export default function TimeOffDetail({ onClose }: Props) {
   );
 }
 
+/**
+ * Hover-revealed details for a single day in the OOO calendar.
+ *
+ *   - Pops up on hover OR keyboard focus (the wrapping cell is focusable
+ *     when there are entries, so this works without a mouse).
+ *   - `position` flips above/below the cell so cells near the top of the
+ *     month grid don't clip into the hero/header.
+ *   - Click-through is preserved (`pointer-events-none` on the popover).
+ */
+function DayPopover({
+  date,
+  entries,
+  position,
+}: {
+  date: Date;
+  entries: TimeOffEntry[];
+  position: 'above' | 'below';
+}) {
+  const dateLabel = date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  return (
+    <div
+      role="tooltip"
+      className={
+        'pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ' +
+        (position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2') +
+        ' min-w-[200px] max-w-[280px] rounded-lg border border-gray-200 p-2 shadow-lg'
+      }
+      style={{ background: 'var(--bg-card)' }}
+      data-testid="timeoff-day-popover"
+    >
+      <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+        {dateLabel}
+      </div>
+      <ul className="space-y-1">
+        {entries.map((e) => (
+          <li key={e.id} className="flex items-center gap-2 px-1 text-xs">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ background: timeOffColor(e.type) }}
+              aria-hidden
+            />
+            <span className="truncate font-medium text-ink" title={e.user.name}>
+              {shortUserName(e.user.name)}
+            </span>
+            <span className="ml-auto shrink-0 text-ink-muted">
+              {e.type}
+              {e.hours > 0 ? ` · ${e.hours}h` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Wraps a calendar day cell with hover/focus state and renders the popover
+ * when there are entries. Components pass the inner cell content via
+ * `children`.
+ */
+function DayCell({
+  date,
+  entries,
+  popoverPosition,
+  className,
+  children,
+}: {
+  date: Date;
+  entries: TimeOffEntry[];
+  popoverPosition: 'above' | 'below';
+  className: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasEntries = entries.length > 0;
+  return (
+    <div
+      className={`relative ${className}`}
+      data-testid={`timeoff-day-${isoDate(date)}`}
+      tabIndex={hasEntries ? 0 : -1}
+      onMouseEnter={() => hasEntries && setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => hasEntries && setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      {children}
+      {open && hasEntries && (
+        <DayPopover date={date} entries={entries} position={popoverPosition} />
+      )}
+    </div>
+  );
+}
+
 function WeekView({
   days,
   byDate,
@@ -234,14 +331,19 @@ function WeekView({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-100">
-      {days.map((d) => {
+      {days.map((d, idx) => {
         const key = isoDate(d);
         const dayEntries = byDate.get(key) ?? [];
+        // Top week-row places the popover below the cell (so it doesn't
+        // clip into the hero); everything else drops it above.
+        const pos: 'above' | 'below' = idx === 0 ? 'below' : 'above';
         return (
-          <div
+          <DayCell
             key={key}
+            date={d}
+            entries={dayEntries}
+            popoverPosition={pos}
             className="flex items-start gap-3 border-b border-gray-100 px-3 py-2 last:border-b-0"
-            data-testid={`timeoff-day-${key}`}
           >
             <div className="w-24 shrink-0 text-sm">
               <span className="font-medium">{fmtWeekday(d)}</span>{' '}
@@ -256,14 +358,13 @@ function WeekView({
                     key={e.id}
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white"
                     style={{ background: timeOffColor(e.type) }}
-                    title={`${e.user.name} — ${e.type}`}
                   >
                     {initials(e.user.name)} · {e.type}
                   </span>
                 ))}
               </div>
             )}
-          </div>
+          </DayCell>
         );
       })}
     </div>
@@ -290,14 +391,21 @@ function MonthView({
       {Array.from({ length: leading }, (_, i) => (
         <div key={`blank-${i}`} />
       ))}
-      {days.map((d) => {
+      {days.map((d, idx) => {
         const key = isoDate(d);
         const dayEntries = byDate.get(key) ?? [];
+        // First row of the grid gets a "below" popover so it doesn't clip
+        // against the hero band above. (leading + idx) / 7 === 0 means
+        // we're still on row 0.
+        const row = Math.floor((leading + idx) / 7);
+        const pos: 'above' | 'below' = row === 0 ? 'below' : 'above';
         return (
-          <div
+          <DayCell
             key={key}
+            date={d}
+            entries={dayEntries}
+            popoverPosition={pos}
             className="min-h-[3.5rem] rounded border border-gray-100 p-1"
-            data-testid={`timeoff-day-${key}`}
           >
             <div className="text-[10px] text-ink-muted">{d.getDate()}</div>
             <div className="mt-0.5 flex flex-wrap gap-0.5">
@@ -306,11 +414,10 @@ function MonthView({
                   key={e.id}
                   className="h-2.5 w-2.5 rounded-full"
                   style={{ background: timeOffColor(e.type) }}
-                  title={`${e.user.name} — ${e.type}`}
                 />
               ))}
             </div>
-          </div>
+          </DayCell>
         );
       })}
     </div>
@@ -322,4 +429,14 @@ function fmtShort(d: Date): string {
 }
 function fmtWeekday(d: Date): string {
   return d.toLocaleDateString(undefined, { weekday: 'short' });
+}
+
+/**
+ * Live Redmine returns engineer names as email addresses (the API key is
+ * non-admin, so /users 403s). Strip the @domain for popover readability;
+ * if it's already a proper name, leave it alone.
+ */
+function shortUserName(name: string): string {
+  const at = name.indexOf('@');
+  return at > 0 ? name.slice(0, at) : name;
 }

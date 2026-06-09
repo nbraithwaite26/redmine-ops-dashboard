@@ -1,22 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
-import ResourceTimeline from './ResourceTimeline';
+import EngineerKanbanBoard from './EngineerKanbanBoard';
 import { findProjectByPath } from '../lib/projectTree';
 import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
 import { getProjects, getTeamSchedule } from '../services/redmineApi';
-import type { Issue, ResourceAllocation, User } from '../types/redmine';
+import type { Issue, User } from '../types/redmine';
 
 /**
- * "Resource Planning" Dashboard tab (CR #17). Embeds the team Gantt scoped to
- * the AIRCRAFT ENGINEERING tree. Users are derived from assignees via
- * getTeamSchedule so the chart works even though /users 403s for non-admin
- * keys (same pattern as the Hours page). Data loads lazily on first open.
+ * "Resource Planning" Dashboard tab (CR #17). Renders the engineer Kanban
+ * scoped to the AIRCRAFT ENGINEERING tree. Users are derived from assignees
+ * via getTeamSchedule so the board works even though /users 403s for non-admin
+ * keys (same pattern as the Hours page). The Kanban itself filters columns
+ * down to the user's selected team via useSelectedTeam — that selection is
+ * shared with the "Your Team's Work" panel on the Team tab, so picking
+ * engineers there is immediately reflected here. The full Gantt remains
+ * available via the "Full resource view" link.
  */
 export default function DashboardResourcePlanning() {
   const [users, setUsers] = useState<User[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [allocations, setAllocations] = useState<ResourceAllocation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,7 +31,6 @@ export default function DashboardResourcePlanning() {
       if (cancelled) return;
       setUsers(schedule.users);
       setIssues(schedule.issues);
-      setAllocations(schedule.allocations);
       setLoading(false);
     })();
     return () => {
@@ -42,7 +44,9 @@ export default function DashboardResourcePlanning() {
         <div>
           <h2 className="text-lg font-semibold">Team workload</h2>
           <p className="text-xs text-ink-muted">
-            Gantt across the team — red bars indicate overload.
+            One column per engineer in your selected team, one card per project. Tap a
+            card to see that engineer's tasks. Team selection is shared with the
+            Team tab.
           </p>
         </div>
         <Link to="/resources" className="btn-secondary">
@@ -50,13 +54,7 @@ export default function DashboardResourcePlanning() {
         </Link>
       </div>
 
-      {loading ? (
-        <div className="card p-8 text-center text-sm text-ink-muted">
-          Loading team schedule…
-        </div>
-      ) : (
-        <ResourceTimeline users={users} issues={issues} allocations={allocations} />
-      )}
+      <EngineerKanbanBoard users={users} issues={issues} loading={loading} />
     </div>
   );
 }

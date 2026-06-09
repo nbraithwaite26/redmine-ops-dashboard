@@ -177,6 +177,22 @@ describe('buildTeamMetrics', () => {
     expect(metrics.find((m) => m.id === 'team-avg-load')).toBeUndefined();
   });
 
+  it('replaces "In progress" with selection-scoped "Tasks assigned" when selectedAssignedTasks is passed', () => {
+    const metrics = buildTeamMetrics({
+      allIssues: mockIssues,
+      pastDueCount: 0,
+      dueThisWeekCount: 0,
+      teamHours,
+      selectedAssignedTasks: 42,
+    });
+    expect(metrics.find((m) => m.id === 'team-in-progress')).toBeUndefined();
+    const assigned = metrics.find((m) => m.id === 'team-assigned-tasks');
+    expect(assigned?.value).toBe(42);
+    expect(assigned?.title).toBe('Tasks assigned');
+    // Same card count — it's a swap, not an addition.
+    expect(metrics).toHaveLength(8);
+  });
+
   it('handles an empty issue list without crashing', () => {
     const metrics = buildTeamMetrics({
       allIssues: empty,
