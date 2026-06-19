@@ -355,8 +355,16 @@ export const mockRedmineApi: RedmineApi = {
     return wait(issues.filter((i) => i.projectId === projectId));
   },
 
-  async getTimeOff(range: { from: string; to: string }) {
+  async getTimeOff(range: {
+    from: string;
+    to: string;
+    includeAtWork?: boolean;
+  }) {
+    // Mock data is OOO-only today; includeAtWork is accepted for interface
+    // compatibility but does not change the result set. When mock data is
+    // extended with at_work entries, filter here on `e.atWork`.
     const all = buildMockTimeOff();
+    void range.includeAtWork;
     return wait(all.filter((e) => e.date >= range.from && e.date <= range.to));
   },
 

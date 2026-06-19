@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, MotionConfig } from 'framer-motion';
+import { MotionConfig } from 'framer-motion';
 import DashboardCard from '../components/DashboardCard';
 import DashboardProjectHealth from '../components/DashboardProjectHealth';
 import DashboardResourcePlanning from '../components/DashboardResourcePlanning';
-import EngineersOutCard from '../components/EngineersOutCard';
 import TeamWorkPanel, { type WeekOffset } from '../components/TeamWorkPanel';
-import TimeOffDetail from '../components/TimeOffDetail';
-import type { Issue } from '../types/redmine';
-import {
-  getIssues,
-  getPastDueIssues,
-  getTimeOff,
-} from '../services/redmineApi';
+import TimeOffCalendar from '../components/TimeOffCalendar';
+import type { Issue, Project } from '../types/redmine';
+import { getIssues, getProjects } from '../services/redmineApi';
 import { buildTeamMetrics } from '../data/mockData';
 import { weekRange } from '../lib/hoursAggregate';
-import { distinctEngineersOut } from '../lib/timeOff';
 import { today } from '../lib/format';
+import { getAllDescendants } from '../lib/projectTree';
 import { useAircraftGroupMembers } from '../hooks/useAircraftGroupMembers';
-import { useSelectedTeam } from '../hooks/useSelectedTeam';
+
+/** Redmine project IDs anchoring the overview's project-scoped metrics. */
+const AIRCRAFT_ENGINEERING_ID = 127;
+const STCS_ID = 1131;
+const CUSTOM_ENGINEERING_SERVICES_ID = 1132;
 
 // Team-first Overview. Personal work (my tasks / my hours) now lives on the
-// Tasks and Hours pages, so the Dashboard leads with the team: team metrics +
-// the engineer cards. Project Health and Resource Planning remain as
-// secondary tabs.
+// Tasks and Hours pages, so the Dashboard leads with the team: four headline
+// metric cards + the engineer cards in TeamWorkPanel. Project Health and
+// Resource Planning remain as secondary tabs.
 const TABS = ['Team', 'Project Health', 'Resource Planning'] as const;
 type Tab = (typeof TABS)[number];
 
@@ -30,99 +29,90 @@ const TEAM_HOURS_TARGET = 360;
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('Team');
-  // Week selection is shared: it drives both the team-hours metric card and
-  // the engineer cards in TeamWorkPanel.
+  // Week selection drives the team-hours metric card + the engineer cards
+  // in TeamWorkPanel.
   const [week, setWeek] = useState<WeekOffset>(0);
   const range = useMemo(() => weekRange(week), [week]);
 
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
-  const [pastDue, setPastDue] = useState<Issue[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [teamLogged, setTeamLogged] = useState(0);
-  const [selectedTasks, setSelectedTasks] = useState(0);
-  const [outCount, setOutCount] = useState(0);
-  const [timeOffOpen, setTimeOffOpen] = useState(false);
 
-  // Globally-selected team — drives every team-scoped metric on the page.
-  // `null` while the team panel is still initializing; that's also the
-  // signal to `buildTeamMetrics` to show the legacy org-wide numbers
-  // (rather than collapse to zero before the picker has loaded).
-  const { selectedIds: selectedTeamIds } = useSelectedTeam();
-  // The Engineers Out card is pinned to the "(eng) Aircraft" Redmine group
-  // (not the user's team picker), per product spec — it should always reflect
-  // the engineering team's time-off calendar regardless of what's selected.
-  const { memberIds: aircraftMemberIds, count: aircraftHeadcount } =
-    useAircraftGroupMembers();
+  // The full AE Calendar (TimeOffCalendar) is pinned to the "(eng) Aircraft"
+  // Redmine group — independent of any team picker, so the calendar always
+  // reflects the engineering team's attendance.
+  const { memberIds: aircraftMemberIds } = useAircraftGroupMembers();
 
-  // Issue counts are not week-scoped — load once.
+  // Initial load: projects (for the active-DDP / active-STC counts) and
+  // issues (for the projects-due-in-7-days count). No `pastDueIssues` /
+  // `selectedTeam` fetches — the 4-card overview doesn't need them.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [a, pd] = await Promise.all([getIssues(), getPastDueIssues()]);
+      const [issuesResp, projectsResp] = await Promise.all([
+        getIssues(),
+        getProjects(),
+      ]);
       if (cancelled) return;
-      setAllIssues(a);
-      setPastDue(pd);
+      setAllIssues(issuesResp);
+      setProjects(projectsResp);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Team-hours total is computed by TeamWorkPanel and lifted up here, so
-  // the metric scopes to the same engineers visible in the picker.
-  // The team-hours useEffect that summed every entry was removed: it was
-  // counting people who weren't on this page's team (sshrestha, grios,
-  // lsanford, enorde, …), which mis-stated the "team hours" total.
-  // Reset to 0 when the week changes so we don't briefly show a stale
-  // number from the previous week while TeamWorkPanel re-aggregates.
+  // Team-hours total is computed by TeamWorkPanel and lifted up here so
+  // the metric scopes to the same engineers visible in the picker. Reset
+  // to 0 when the week changes so we don't briefly show a stale number
+  // from the previous week while TeamWorkPanel re-aggregates.
   useEffect(() => {
     setTeamLogged(0);
   }, [range.from, range.to]);
 
-  // Engineers out in the selected week (drives the Engineers-out card).
-  // Scoped to the (eng) Aircraft Redmine group, NOT the team picker — the
-  // card represents the engineering team's time-off calendar specifically.
-  // While `aircraftMemberIds` is null (initial fetch in flight) we show 0
-  // rather than briefly counting everyone, then fill in once it resolves.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const off = await getTimeOff({ from: range.from, to: range.to });
-      if (cancelled) return;
-      if (!aircraftMemberIds) {
-        setOutCount(0);
-        return;
-      }
-      const scoped = off.filter((e) => aircraftMemberIds.has(e.user.id));
-      setOutCount(distinctEngineersOut(scoped));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to, aircraftMemberIds]);
+  // Active DDPs = descendants of "Custom Engineering Services" (1132) with
+  // status === "Active". Tree walk handles arbitrary nesting depth.
+  const activeDdpCount = useMemo(() => {
+    return getAllDescendants(projects, CUSTOM_ENGINEERING_SERVICES_ID).filter(
+      (p) => p.status === 'Active',
+    ).length;
+  }, [projects]);
 
-  // Open issues due within the next 7 days (today inclusive).
-  const dueThisWeekCount = useMemo(() => {
+  // Active STC projects = descendants of "STCs" (1131) with status "Active".
+  const activeStcCount = useMemo(() => {
+    return getAllDescendants(projects, STCS_ID).filter((p) => p.status === 'Active').length;
+  }, [projects]);
+
+  // Projects due in the next 7 days, scoped to AIRCRAFT ENGINEERING:
+  // distinct projectIds of open issues with dueDate in [today, today+7].
+  const projectsDueIn7DaysCount = useMemo(() => {
+    if (projects.length === 0 || allIssues.length === 0) return 0;
+    const aeDescendants = new Set(
+      getAllDescendants(projects, AIRCRAFT_ENGINEERING_ID).map((p) => p.id),
+    );
+    if (aeDescendants.size === 0) return 0;
     const start = today();
     const startIso = start.toISOString().slice(0, 10);
     const endDate = new Date(start);
     endDate.setDate(start.getDate() + 7);
     const endIso = endDate.toISOString().slice(0, 10);
-    return allIssues.filter(
-      (i) => !i.closedOn && i.dueDate && i.dueDate >= startIso && i.dueDate <= endIso,
-    ).length;
-  }, [allIssues]);
+    const projectIds = new Set<number>();
+    for (const issue of allIssues) {
+      if (issue.closedOn) continue;
+      if (!issue.dueDate) continue;
+      if (issue.dueDate < startIso || issue.dueDate > endIso) continue;
+      if (!aeDescendants.has(issue.projectId)) continue;
+      projectIds.add(issue.projectId);
+    }
+    return projectIds.size;
+  }, [projects, allIssues]);
 
   const teamMetrics = buildTeamMetrics({
-    allIssues,
-    pastDueIssues: pastDue,
-    pastDueCount: pastDue.length,
-    dueThisWeekCount,
+    activeDdpCount,
+    activeStcCount,
+    projectsDueIn7DaysCount,
     teamHours: { logged: teamLogged, target: TEAM_HOURS_TARGET },
     teamHoursWeekLabel: week === 0 ? 'this week' : 'last week',
-    selectedAssignedTasks: selectedTasks,
-    // Routes EVERY team-scoped card through the picker. Unassigned tasks
-    // stay global on purpose — see buildTeamMetrics for rationale.
-    selectedUserIds: selectedTeamIds,
   });
 
   return (
@@ -154,32 +144,23 @@ export default function Dashboard() {
 
       {tab === 'Team' && (
         <MotionConfig reducedMotion="user">
+          {/* Exactly four overview cards, one row on xl. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {teamMetrics.map((metric) =>
-              metric.id === 'team-engineers' ? (
-                <EngineersOutCard
-                  key={metric.id}
-                  outCount={outCount}
-                  // Headcount is the (eng) Aircraft group size, not the picker
-                  // — keeps "X on the team" honest with the Out count above.
-                  total={aircraftHeadcount}
-                  onSelect={() => setTimeOffOpen(true)}
-                />
-              ) : (
-                <DashboardCard key={metric.id} metric={metric} />
-              ),
-            )}
+            {teamMetrics.map((metric) => (
+              <DashboardCard key={metric.id} metric={metric} />
+            ))}
           </div>
+
+          {/* Full AE Calendar — live time-off + attendance scoped to the
+              (eng) Aircraft group. Sits between the headline cards and the
+              engineer panel. */}
+          <TimeOffCalendar memberIds={aircraftMemberIds} />
+
           <TeamWorkPanel
             week={week}
             onWeekChange={setWeek}
             onSelectedHoursChange={setTeamLogged}
-            onSelectedTasksChange={setSelectedTasks}
           />
-
-          <AnimatePresence>
-            {timeOffOpen && <TimeOffDetail onClose={() => setTimeOffOpen(false)} />}
-          </AnimatePresence>
         </MotionConfig>
       )}
 

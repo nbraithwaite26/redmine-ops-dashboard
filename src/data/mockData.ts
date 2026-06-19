@@ -777,151 +777,61 @@ export function buildDashboardMetrics({
 }
 
 interface TeamMetricInputs {
-  /** Every issue across the team (all assignees). */
-  allIssues: Issue[];
-  /** Overdue team issues (so we can re-filter by selected team). */
-  pastDueIssues?: Issue[];
-  /** Fallback when pastDueIssues isn't provided. */
-  pastDueCount: number;
-  /** Count of open team issues due within the next 7 days. */
-  dueThisWeekCount: number;
+  /** Count of active projects (status === "Active") under the Custom
+   *  Engineering Services branch (project_id=1132). */
+  activeDdpCount: number;
+  /** Count of active projects (status === "Active") under the STCs branch
+   *  (project_id=1131). */
+  activeStcCount: number;
+  /** Count of distinct projects (scoped to Aircraft Engineering, project_id=
+   *  127) with open tasks due within the next 7 days. */
+  projectsDueIn7DaysCount: number;
+  /** Hours logged this week by the visible engineers vs. the weekly target. */
   teamHours: { logged: number; target: number };
   /** Week label for the team-hours card title, e.g. "this week" / "last week". */
   teamHoursWeekLabel?: string;
-  /**
-   * Sum of tasks assigned to the engineers currently picked in the team-
-   * member selector. When provided, replaces the "In progress" card with
-   * an "Assigned tasks" card scoped to the selected engineers.
-   */
-  selectedAssignedTasks?: number;
-  /**
-   * When provided, every team-scoped metric below is filtered to issues
-   * whose assignee.id is in this list (so the cards reflect the picked
-   * team rather than the whole org). Unassigned-tasks is intentionally
-   * left global — those are by definition NOT in any team and we want
-   * them visible regardless of who's selected.
-   *
-   * Pass null/undefined to use the global counts (back-compat).
-   */
-  selectedUserIds?: ReadonlyArray<number> | null;
 }
 
 /**
- * Team-scoped metric cards for the Dashboard "Your Team's Work" tab. Unlike
- * buildDashboardMetrics (which centers on the current user), every card here
- * reflects the whole team: total tasks, in-progress, past-due, unassigned,
- * the engineer roster, and team hours. Engineers are derived from assignees
- * since /users 403s for the non-admin key.
+ * Dashboard Overview "Team" tab — exactly four cards, one row:
+ *   1. Active DDPs                       (id: team-active-ddps)
+ *   2. Active STC projects               (id: team-active-stcs)
+ *   3. Team hours this week              (id: team-hours-week)
+ *   4. Projects due in the next 7 days   (id: team-projects-due-week)
  *
- * When `selectedUserIds` is supplied, each team-relevant card filters down
- * to that subset. `team-unassigned` stays global (orphan tasks aren't in
- * any team), and `team-hours-week` keeps using the pre-aggregated value
- * since the caller already computes that against the visible engineers.
+ * The team-hours card keeps its donut ring as the only progress affordance
+ * on the overview; everything else is a plain number. Inputs are pre-
+ * computed by the caller (Dashboard.tsx) so this stays a pure formatter.
  */
 export function buildTeamMetrics({
-  allIssues,
-  pastDueIssues,
-  pastDueCount,
-  dueThisWeekCount,
+  activeDdpCount,
+  activeStcCount,
+  projectsDueIn7DaysCount,
   teamHours,
   teamHoursWeekLabel = 'this week',
-  selectedAssignedTasks,
-  selectedUserIds,
 }: TeamMetricInputs): DashboardMetric[] {
-  // When a team selection is active, filter the issue lists used by the
-  // team-scoped metrics. `selectedUserIds === null/undefined` ⇒ legacy
-  // org-wide behavior; `selectedUserIds === []` ⇒ "no team selected" ⇒
-  // the team-scoped counts collapse to zero (which is the honest answer).
-  const teamSet = selectedUserIds ? new Set(selectedUserIds) : null;
-  const inTeam = (issue: Issue): boolean =>
-    !teamSet || (issue.assignee !== null && teamSet.has(issue.assignee.id));
-
-  const teamIssues = teamSet ? allIssues.filter(inTeam) : allIssues;
-  const teamPastDueCount = teamSet
-    ? (pastDueIssues ?? []).filter(inTeam).length
-    : pastDueCount;
-  const teamDueThisWeekCount = teamSet
-    ? // Recompute due-this-week on the team-filtered issue list.
-      (() => {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        const startIso = start.toISOString().slice(0, 10);
-        const endDate = new Date(start);
-        endDate.setDate(start.getDate() + 7);
-        const endIso = endDate.toISOString().slice(0, 10);
-        return teamIssues.filter(
-          (i) => !i.closedOn && i.dueDate && i.dueDate >= startIso && i.dueDate <= endIso,
-        ).length;
-      })()
-    : dueThisWeekCount;
-
-  const inProgressCount = teamIssues.filter((i) => i.status === 'In Progress').length;
-  // Orphan tasks stay org-wide on purpose — they belong to no team yet.
-  const unassignedCount = allIssues.filter((i) => !i.assignee).length;
-  const waitingCount = teamIssues.filter((i) => i.status === 'Feedback').length;
-  const engineerIds = new Set(
-    teamIssues.map((i) => i.assignee?.id).filter((id): id is number => id !== undefined),
-  );
-  const engineerCount = engineerIds.size;
-  const assignedCard: DashboardMetric =
-    selectedAssignedTasks !== undefined
-      ? {
-          id: 'team-assigned-tasks',
-          title: 'Tasks assigned',
-          value: selectedAssignedTasks,
-          progress: safePercent(
-            selectedAssignedTasks,
-            Math.max(selectedAssignedTasks, 1),
-          ),
-          statusLabel: 'To selected engineers',
-          statusColor: 'blue',
-          color: '#8B5CF6',
-          caption: 'open',
-        }
-      : {
-          id: 'team-in-progress',
-          title: 'In progress',
-          value: inProgressCount,
-          total: allIssues.length,
-          progress: safePercent(inProgressCount, Math.max(allIssues.length, 1)),
-          statusLabel: 'Active work',
-          statusColor: 'blue',
-          color: '#8B5CF6',
-          caption: 'being worked',
-        };
-
   const cards: DashboardMetric[] = [
     {
-      id: 'team-tasks',
-      title: 'Team tasks',
-      value: teamIssues.length,
-      progress: safePercent(teamIssues.length, Math.max(teamIssues.length, 50)),
-      statusLabel: teamSet ? 'Selected team' : 'All assignees',
+      id: 'team-active-ddps',
+      title: 'Active DDPs',
+      value: activeDdpCount,
+      progress: safePercent(activeDdpCount, Math.max(activeDdpCount, 10)),
+      statusLabel: 'Custom Engineering Services',
+      statusColor: 'green',
+      color: '#16A34A',
+      caption: 'active',
+      route: '/projects/custom-engineering-services',
+    },
+    {
+      id: 'team-active-stcs',
+      title: 'Active STC projects',
+      value: activeStcCount,
+      progress: safePercent(activeStcCount, Math.max(activeStcCount, 10)),
+      statusLabel: 'STCs',
       statusColor: 'blue',
-      color: '#3B82F6',
-      caption: 'total open',
-    },
-    assignedCard,
-    {
-      id: 'team-past-due',
-      title: 'Team past due',
-      value: teamPastDueCount,
-      progress: safePercent(teamPastDueCount, Math.max(teamPastDueCount + 4, 10)),
-      statusLabel: 'Action needed',
-      statusColor: 'red',
-      color: '#EF4444',
-      caption: 'overdue',
-      route: '/past-due',
-    },
-    {
-      id: 'team-unassigned',
-      title: 'Unassigned tasks',
-      value: unassignedCount,
-      progress: safePercent(unassignedCount, Math.max(unassignedCount, 8)),
-      statusLabel: 'Triage queue',
-      statusColor: 'orange',
-      color: '#F97316',
-      caption: 'unassigned',
+      color: '#2563EB',
+      caption: 'active',
+      route: '/projects/stcs',
     },
     {
       id: 'team-hours-week',
@@ -936,34 +846,14 @@ export function buildTeamMetrics({
       route: '/reports',
     },
     {
-      id: 'team-engineers',
-      title: 'Engineers',
-      value: engineerCount,
-      progress: 100,
-      statusLabel: teamSet ? 'In selected team' : 'With assigned work',
-      statusColor: 'green',
-      color: '#10B981',
-      caption: 'on the team',
-    },
-    {
-      id: 'team-due-week',
-      title: 'Due this week',
-      value: teamDueThisWeekCount,
-      progress: safePercent(teamDueThisWeekCount, Math.max(teamDueThisWeekCount, 10)),
-      statusLabel: 'Next 7 days',
-      statusColor: 'blue',
-      color: '#0EA5E9',
-      caption: 'due soon',
-    },
-    {
-      id: 'team-waiting',
-      title: 'Awaiting response',
-      value: waitingCount,
-      progress: safePercent(waitingCount, Math.max(waitingCount, 6)),
-      statusLabel: 'Feedback',
-      statusColor: 'yellow',
-      color: '#EAB308',
-      caption: 'waiting',
+      id: 'team-projects-due-week',
+      title: 'Projects due in the next 7 days',
+      value: projectsDueIn7DaysCount,
+      progress: safePercent(projectsDueIn7DaysCount, Math.max(projectsDueIn7DaysCount, 10)),
+      statusLabel: 'Open tasks · next 7 days',
+      statusColor: 'orange',
+      color: '#F97316',
+      caption: 'projects',
     },
   ];
 

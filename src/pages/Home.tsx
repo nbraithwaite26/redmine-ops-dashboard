@@ -20,7 +20,6 @@ import {
   getIssues,
   getMyIssues,
   getPastDueIssues,
-  getTeamHours,
   getTimeEntries,
   getWeeklyHours,
 } from '../services/redmineApi';
@@ -78,9 +77,11 @@ export default function Home() {
   const [allIssues, setAllIssues] = useState<Issue[]>([]);
   const [pastDue, setPastDue] = useState<Issue[]>([]);
   const [weekly, setWeekly] = useState({ logged: 0, target: 40 });
-  const [team, setTeam] = useState({ logged: 0, target: 360 });
-  // Raw time entries for THIS week — when a team is selected we re-aggregate
-  // from these instead of using the org-wide getTeamHours total.
+  const TEAM_HOURS_TARGET = 360;
+  // Raw time entries for THIS week. We derive BOTH the org-wide team total
+  // and the per-team-selection total from this single fetch — the dashboard
+  // used to ALSO call getTeamHours() which paginated the same /time-entries
+  // for its sum. One fetch instead of two.
   const [weekEntries, setWeekEntries] = useState<
     { hours: number; user: { id: number } }[]
   >([]);
@@ -90,19 +91,17 @@ export default function Home() {
     (async () => {
       const wr = weekRange(0);
       // currentUser?.id is undefined → backend defaults to "me" (the API key holder)
-      const [m, a, pd, w, t, entries] = await Promise.all([
+      const [m, a, pd, w, entries] = await Promise.all([
         getMyIssues(currentUser?.id),
         getIssues(),
         getPastDueIssues(),
         getWeeklyHours(currentUser?.id),
-        getTeamHours(),
         getTimeEntries({ from: wr.from, to: wr.to }),
       ]);
       setMyIssues(m);
       setAllIssues(a);
       setPastDue(pd);
       setWeekly(w);
-      setTeam(t);
       setWeekEntries(entries);
     })();
   }, [userLoading, currentUser?.id]);
@@ -116,15 +115,20 @@ export default function Home() {
   }, [pastDue, selectedTeamIds]);
 
   // Team-scoped team-hours: sum only the selected engineers' entries this
-  // week. Without a selection we fall back to the org-wide getTeamHours().
+  // week. Without a selection, sum every entry in `weekEntries` — which is
+  // the same number `getTeamHours()` used to return after paginating the
+  // identical /time-entries query a second time.
   const teamScopedHours = useMemo(() => {
-    if (!selectedTeamIds) return team;
-    const ids = new Set(selectedTeamIds);
-    const logged = weekEntries
-      .filter((e) => ids.has(e.user.id))
-      .reduce((sum, e) => sum + e.hours, 0);
-    return { logged: Math.round(logged * 10) / 10, target: team.target };
-  }, [selectedTeamIds, weekEntries, team]);
+    const filter = selectedTeamIds ? new Set(selectedTeamIds) : null;
+    const logged = weekEntries.reduce(
+      (sum, e) => (filter && !filter.has(e.user.id) ? sum : sum + e.hours),
+      0,
+    );
+    return {
+      logged: Math.round(logged * 10) / 10,
+      target: TEAM_HOURS_TARGET,
+    };
+  }, [selectedTeamIds, weekEntries]);
 
   const headlineMetrics = buildDashboardMetrics({
     myIssues,

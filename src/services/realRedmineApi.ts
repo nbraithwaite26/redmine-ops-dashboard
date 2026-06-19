@@ -140,21 +140,54 @@ function ganttRowToIssue(row: GanttRow): Issue {
   };
 }
 
+// ─── In-flight GET dedup ──────────────────────────────────────────────────
+// Module-level Map of GET URL+query → in-flight Promise. Concurrent identical
+// reads share a single network call; on settle (resolve or reject) the entry
+// is dropped so the next caller refetches normally. The server already does
+// per-key coalescing (cache.ts), but doing it on the client too means even
+// stacked component-mount fetches in the SAME render share one round-trip.
+//
+// Reset by syncWithRedmine() so a manual refresh isn't served from stale
+// in-flight promises (rare race but cheap to guard).
+
+const inFlight = new Map<string, Promise<unknown>>();
+
+function dedupKey(path: string, query?: Record<string, string | number>): string {
+  if (!query) return path;
+  const parts = Object.entries(query)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`);
+  return parts.length ? `${path}?${parts.join('&')}` : path;
+}
+
+export function dedupedGet<T>(
+  path: string,
+  query?: Record<string, string | number>,
+): Promise<T> {
+  const key = dedupKey(path, query);
+  const existing = inFlight.get(key);
+  if (existing) return existing as Promise<T>;
+  const promise = httpGet<T>(path, query).finally(() => {
+    inFlight.delete(key);
+  });
+  inFlight.set(key, promise);
+  return promise as Promise<T>;
+}
+
+/** Test-only hook so unit tests can start each case with a clean slate. */
+export function __resetDedupCache(): void {
+  inFlight.clear();
+}
+
 // ─── Metadata coordinator (plan §7.8.1) ──────────────────────────────────
 // CR #29: list/detail caches are now authoritative on the server. The
 // metadata coordinator stays here only as in-render dedup — multiple
 // dropdown selectors mounted in the same render share one /metadata call
 // instead of issuing N parallel ones. syncWithRedmine() resets it.
 
-let metadataPromise: Promise<MetadataBundle> | null = null;
-
 function getMetadata(): Promise<MetadataBundle> {
-  if (metadataPromise) return metadataPromise;
-  metadataPromise = httpGet<MetadataBundle>('/metadata').catch((err) => {
-    metadataPromise = null;
-    throw err;
-  });
-  return metadataPromise;
+  return dedupedGet<MetadataBundle>('/metadata');
 }
 
 /**
@@ -176,31 +209,100 @@ async function invalidateServerCache(): Promise<void> {
 }
 
 /**
- * Walks every page of a paginated list endpoint and concatenates the
- * results. Redmine caps `limit` at 100, so any call hard-coded to a single
- * page silently undercounts once the data set crosses 100 (this bit the
- * Dashboard's team-hours card for any week with >100 entries). Use this
- * for every "give me all of X for this filter" facade method.
+ * Walks every page of a paginated list endpoint and concatenates the results.
  *
- * `maxPages` is a safety cap to keep a runaway upstream `total_count`
- * from spinning forever; default 20 covers ~2000 items.
+ * Strategy (mirrors server-side `/gantt`): fetch page 0 first to learn
+ * `total_count`, then fan out the remaining offsets in parallel with bounded
+ * concurrency. For an N-page list, wall-clock goes from N sequential
+ * round-trips to roughly `1 + ceil((N-1)/CONCURRENCY)`.
+ *
+ * - `PAGE` is fixed at Redmine's max (100); single-page lists short-circuit.
+ * - `CONCURRENCY` matches the server-side Gantt route so we don't burst
+ *   harder against this Redmine instance than the warmer already does.
+ * - `maxPages` caps a runaway upstream `total_count`. Default 50 covers
+ *   ~5000 items.
  */
+async function fetchPage<T>(
+  path: string,
+  baseQuery: Record<string, string | number>,
+  offset: number,
+  pageSize: number,
+): Promise<PaginatedWire<T>> {
+  return dedupedGet<PaginatedWire<T>>(path, {
+    ...baseQuery,
+    limit: pageSize,
+    offset,
+  });
+}
+
+async function withConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i] as T, i);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Per-paginated-endpoint in-flight cap. Centralized topology defaults
+ * to 2 — comment below explains why. Portable .exe builds bump this via
+ * `VITE_PAGINATE_CONCURRENCY` (set in `scripts/build-portable.mjs`)
+ * because the single-user case has no other concurrent dashboard
+ * sessions competing for the upstream's connection pool.
+ */
+const PAGINATE_CONCURRENCY = (() => {
+  const raw = import.meta.env.VITE_PAGINATE_CONCURRENCY;
+  const n = typeof raw === 'string' ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 2;
+})();
+
 async function paginateAll<T>(
   path: string,
   baseQuery: Record<string, string | number> = {},
   maxPages = 50,
 ): Promise<T[]> {
   const PAGE = 100;
-  const collected: T[] = [];
-  for (let page = 0; page < maxPages; page += 1) {
-    const res = await httpGet<PaginatedWire<T>>(path, {
-      ...baseQuery,
-      limit: PAGE,
-      offset: page * PAGE,
-    });
-    collected.push(...res.items);
-    if (res.items.length === 0 || collected.length >= res.total) break;
+  // Concurrency 2 (centralized default): ~2× faster than sequential
+  // while limiting the upstream burst. With multiple paginated endpoints
+  // kicking off in parallel (Home fires ~5 of these on mount) any higher
+  // number saturates the Redmine REST endpoint and starves concurrent
+  // writes (e.g. POST /time-entries hitting the upstream 15s timeout).
+  // Portable .exe builds raise this via VITE_PAGINATE_CONCURRENCY since
+  // the single-user case has no other dashboard sessions competing.
+  const CONCURRENCY = PAGINATE_CONCURRENCY;
+
+  const first = await fetchPage<T>(path, baseQuery, 0, PAGE);
+  if (first.items.length === 0 || first.items.length >= first.total) {
+    return first.items;
   }
+
+  const totalPages = Math.min(maxPages, Math.ceil(first.total / PAGE));
+  const remainingOffsets: number[] = [];
+  for (let p = 1; p < totalPages; p += 1) remainingOffsets.push(p * PAGE);
+
+  const pages = await withConcurrency(
+    remainingOffsets,
+    CONCURRENCY,
+    (offset) => fetchPage<T>(path, baseQuery, offset, PAGE),
+  );
+
+  const collected: T[] = first.items.slice();
+  for (const page of pages) collected.push(...page.items);
   return collected;
 }
 
@@ -312,7 +414,7 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async syncWithRedmine(): Promise<{ syncedAt: string }> {
-    metadataPromise = null;
+    inFlight.clear();
     await invalidateServerCache();
     lastSync = new Date().toISOString();
     return { syncedAt: lastSync };
@@ -542,12 +644,12 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getGroups(): Promise<GroupSummary[]> {
-    const res = await httpGet<{ items: GroupSummary[] }>('/groups');
+    const res = await dedupedGet<{ items: GroupSummary[] }>('/groups');
     return res.items;
   },
 
   async getGroup(id: number): Promise<Group> {
-    return httpGet<Group>(`/groups/${id}`);
+    return dedupedGet<Group>(`/groups/${id}`);
   },
 
   async getIssueStatuses(): Promise<string[]> {
@@ -587,7 +689,7 @@ export const realRedmineApi: RedmineApi = {
   },
 
   async getResourceAllocations(projectId?: number): Promise<ResourceAllocation[]> {
-    const res = await httpGet<{ items: GanttRow[]; total: number }>(
+    const res = await dedupedGet<{ items: GanttRow[]; total: number }>(
       '/gantt',
       projectId !== undefined ? { project_id: projectId } : undefined,
     );
@@ -599,7 +701,7 @@ export const realRedmineApi: RedmineApi = {
     issues: Issue[];
     allocations: ResourceAllocation[];
   }> {
-    const res = await httpGet<{ items: GanttRow[]; total: number }>(
+    const res = await dedupedGet<{ items: GanttRow[]; total: number }>(
       '/gantt',
       projectId !== undefined ? { project_id: projectId } : undefined,
     );
@@ -615,15 +717,21 @@ export const realRedmineApi: RedmineApi = {
     return { users: [...userMap.values()], issues, allocations };
   },
 
-  async getTimeOff(range: { from: string; to: string }): Promise<TimeOffEntry[]> {
-    // Sourced from Easy Redmine's /easy_attendances.json on this instance —
-    // the backend filters to rows where activity.at_work=false (Vacation,
-    // Holiday, Sick, etc.) and clips to the requested window. See
-    // server/src/routes/timeOff.ts for the pagination strategy.
-    const res = await httpGet<{ items: TimeOffEntry[] }>('/time-off', {
+  async getTimeOff(range: {
+    from: string;
+    to: string;
+    includeAtWork?: boolean;
+  }): Promise<TimeOffEntry[]> {
+    // Sourced from Easy Redmine's /easy_attendances.json on this instance.
+    // The backend default keeps the OOO-only filter (activity.at_work=false);
+    // pass `includeAtWork: true` for the AE Calendar view which also wants
+    // Conference/Seminar, Customer Visit, etc.
+    const query: Record<string, string | number> = {
       from: range.from,
       to: range.to,
-    });
+    };
+    if (range.includeAtWork) query.include_at_work = 'true';
+    const res = await dedupedGet<{ items: TimeOffEntry[] }>('/time-off', query);
     return res.items;
   },
 

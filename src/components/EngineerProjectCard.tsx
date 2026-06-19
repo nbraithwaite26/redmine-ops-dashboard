@@ -50,7 +50,7 @@ export default function EngineerProjectCard({ userId, project, onSelect }: Props
       >
         <motion.div
           layoutId={`eng-project-name-${userId}-${project.projectId}`}
-          className="truncate text-sm font-semibold leading-snug text-white"
+          className="line-clamp-2 text-sm font-semibold leading-snug text-white"
           title={project.projectName}
         >
           {project.projectName}

@@ -1,61 +1,102 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Printer, Save, Settings as SettingsIcon } from 'lucide-react';
 import clsx from 'clsx';
 import type { Issue, ResourceAllocation, User } from '../types/redmine';
 import { formatHours, today as todayFn } from '../lib/format';
+import {
+  ZOOM_PRESETS,
+  clipBarToWindow,
+  defaultWindowStart,
+  parseLocalIso,
+  windowDates,
+  type ZoomLevel,
+} from '../lib/ganttWindow';
 
 interface Props {
   users: User[];
   issues: Issue[];
   allocations: ResourceAllocation[];
+  /** Optional fixed window start. When omitted, defaults to a window
+   *  centered on today (Monday-aligned). */
   startDate?: string;
+  /** Optional fixed days. When omitted, derived from the active zoom. */
   days?: number;
+  /** Optional initial zoom level. Defaults to "Week". */
+  initialZoom?: ZoomLevel;
 }
 
-type Zoom = 'Day' | 'Week' | 'Month' | 'Quarter' | 'Year';
-
-const ZOOMS: Zoom[] = ['Day', 'Week', 'Month', 'Quarter', 'Year'];
+const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter', 'Year'];
 
 export default function ResourceTimeline({
   users,
   issues,
   allocations,
-  startDate = '2026-05-18',
-  days = 21,
+  startDate,
+  days,
+  initialZoom = 'Week',
 }: Props) {
-  const [zoom, setZoom] = useState<Zoom>('Week');
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 1: true });
+  const [zoom, setZoom] = useState<ZoomLevel>(initialZoom);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   const today = useMemo(() => todayFn(), []);
-  // Memoize `start` so its identity is stable across renders; without this
-  // the `dates` memo would invalidate on every render because `new Date()`
-  // produces a fresh object each pass.
-  const start = useMemo(() => new Date(startDate), [startDate]);
-  const dates = useMemo(() => {
-    return Array.from({ length: days }, (_, idx) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + idx);
-      return d;
-    });
-  }, [start, days]);
 
-  const totalWidth = dates.length * 36;
+  // Zoom-driven window sizing. Props override the preset when supplied so
+  // existing callers / tests that pin a window keep working.
+  const preset = ZOOM_PRESETS[zoom];
+  const daysVisible = days ?? preset.days;
+  const cellWidth = preset.cellWidth;
+  const startIso = useMemo(
+    () => startDate ?? defaultWindowStart(today, daysVisible),
+    [startDate, today, daysVisible],
+  );
+
+  const dates = useMemo(
+    () => windowDates(startIso, daysVisible),
+    [startIso, daysVisible],
+  );
+  const totalWidth = dates.length * cellWidth;
 
   const grouped = useMemo(() => {
     return users.map((u) => {
       const userIssues = issues.filter((i) => i.assignee?.id === u.id);
       const userAllocs = allocations.filter((a) => a.userId === u.id);
-      return { user: u, issues: userIssues, allocations: userAllocs };
+      // A user row is "no dates available" when none of its issues have
+      // either a start or due date — in that case we render a striped
+      // placeholder instead of a blank timeline so it's clear that the
+      // blankness is upstream data, not a load bug.
+      const hasAnyDate = userIssues.some(
+        (i) => (i.startDate && i.startDate.length > 0) || (i.dueDate && i.dueDate.length > 0),
+      );
+      return { user: u, issues: userIssues, allocations: userAllocs, hasAnyDate };
     });
   }, [users, issues, allocations]);
 
-  const dayIndex = (date: Date) => {
-    const diff = Math.floor((date.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
+  // Auto-scroll the timeline pane so "today" lands near the left third of
+  // the visible area on first render. Only fires on mount + when the window
+  // start changes — manual scrolling afterwards is preserved.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const todayMidnight = new Date(today);
+    todayMidnight.setHours(0, 0, 0, 0);
+    const start = parseLocalIso(startIso);
+    const idx = Math.floor((todayMidnight.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+    if (idx < 0 || idx >= daysVisible) return;
+    // Position "today" about 1/3 from the left of the visible pane.
+    const visiblePx = el.clientWidth;
+    const target = Math.max(0, idx * cellWidth - visiblePx / 3);
+    // jsdom (test env) doesn't implement scrollTo; fall back to setting
+    // scrollLeft directly so unit tests render the component without throwing.
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ left: target, behavior: 'auto' });
+    } else {
+      el.scrollLeft = target;
+    }
+  }, [startIso, daysVisible, cellWidth, today]);
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden" data-testid="resource-timeline">
       <div className="px-4 py-3 flex items-center gap-3 border-b">
         <div className="font-semibold">Resource allocation</div>
         <div className="ml-4 flex bg-canvas rounded p-0.5 text-xs">
@@ -63,6 +104,7 @@ export default function ResourceTimeline({
             <button
               key={z}
               onClick={() => setZoom(z)}
+              data-testid={`gantt-zoom-${z}`}
               className={clsx(
                 'px-2 py-1 rounded',
                 zoom === z ? 'bg-white shadow-sm font-medium' : 'text-ink-muted',
@@ -131,63 +173,91 @@ export default function ResourceTimeline({
         </div>
 
         {/* Right timeline */}
-        <div className="flex-1 overflow-x-auto">
+        <div className="flex-1 overflow-x-auto" ref={scrollRef}>
           <div style={{ width: totalWidth }}>
             <div
               className="grid bg-canvas text-xs text-ink-muted"
-              style={{ gridTemplateColumns: `repeat(${dates.length}, 36px)` }}
+              style={{ gridTemplateColumns: `repeat(${dates.length}, ${cellWidth}px)` }}
             >
-              {dates.map((d) => (
+              {dates.map((dt) => (
                 <div
-                  key={d.toISOString()}
+                  key={dt.toISOString()}
                   className={clsx(
                     'px-1 py-2 text-center border-r border-gray-100',
-                    d.getDay() === 0 || d.getDay() === 6 ? 'bg-canvas/70' : '',
-                    d.toDateString() === today.toDateString() && 'bg-brand-100 text-ink',
+                    dt.getDay() === 0 || dt.getDay() === 6 ? 'bg-canvas/70' : '',
+                    dt.toDateString() === today.toDateString() && 'bg-brand-100 text-ink',
                   )}
                 >
-                  <div className="text-[10px]">{d.toLocaleDateString(undefined, { weekday: 'short' })[0]}</div>
-                  <div>{d.getDate()}</div>
+                  <div className="text-[10px]">{dt.toLocaleDateString(undefined, { weekday: 'short' })[0]}</div>
+                  <div>{dt.getDate()}</div>
                 </div>
               ))}
             </div>
 
-            {grouped.map(({ user, allocations: userAllocs }) => {
+            {grouped.map(({ user, allocations: userAllocs, hasAnyDate }) => {
               const isExpanded = expanded[user.id] ?? false;
               return (
                 <div key={user.id}>
                   <div
                     className="relative border-t border-gray-100 h-10 grid"
-                    style={{ gridTemplateColumns: `repeat(${dates.length}, 36px)` }}
+                    style={{ gridTemplateColumns: `repeat(${dates.length}, ${cellWidth}px)` }}
+                    data-testid={`gantt-row-${user.id}`}
+                    data-no-date={!hasAnyDate}
                   >
-                    {dates.map((d) => (
+                    {dates.map((dt) => (
                       <div
-                        key={d.toISOString()}
+                        key={dt.toISOString()}
                         className={clsx(
                           'border-r border-gray-100 h-10',
-                          d.toDateString() === today.toDateString() && 'bg-brand-100/40',
+                          dt.toDateString() === today.toDateString() && 'bg-brand-100/40',
                         )}
                       />
                     ))}
+
+                    {!hasAnyDate && (
+                      // Striped placeholder so the user sees a clear "no
+                      // dates set in Redmine" affordance instead of a blank
+                      // row that looks like a load bug.
+                      <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                          backgroundImage:
+                            'repeating-linear-gradient(45deg, rgba(0,0,0,0.04) 0 6px, transparent 6px 12px)',
+                        }}
+                        aria-hidden
+                        title="No tasks with start or due dates in Redmine"
+                      />
+                    )}
+
                     {userAllocs.map((a) => {
-                      const startIdx = dayIndex(new Date(a.startDate));
-                      const endIdx = dayIndex(new Date(a.endDate));
-                      // Skip allocations without parseable start/end dates
-                      // (many real issues lack both) — otherwise left/width
-                      // compute to NaN and React warns on the style.
-                      if (Number.isNaN(startIdx) || Number.isNaN(endIdx)) return null;
-                      const left = Math.max(0, startIdx) * 36 + 2;
-                      const width = Math.max(0, endIdx - Math.max(0, startIdx) + 1) * 36 - 4;
-                      if (width <= 0) return null;
+                      const rect = clipBarToWindow(
+                        startIso,
+                        daysVisible,
+                        cellWidth,
+                        a.startDate,
+                        a.endDate,
+                      );
+                      if (!rect) return null;
                       return (
                         <div
                           key={a.id}
+                          data-testid={`gantt-bar-${a.id}`}
                           className={clsx(
-                            'absolute top-2 h-6 rounded text-[10px] text-white px-2 flex items-center gap-1 shadow',
-                            a.isOverloaded ? 'bg-red-500' : a.allocationType === 'Manual' ? 'bg-purple-500' : 'bg-blue-500',
+                            'absolute top-2 h-6 rounded text-[10px] text-white px-2 flex items-center gap-1 shadow overflow-hidden',
+                            a.isOverloaded
+                              ? 'bg-red-500'
+                              : a.allocationType === 'Manual'
+                              ? 'bg-purple-500'
+                              : 'bg-blue-500',
+                            rect.clippedLeft && 'rounded-l-none border-l border-dashed border-white/70',
+                            rect.clippedRight && 'rounded-r-none border-r border-dashed border-white/70',
                           )}
-                          style={{ left, width }}
-                          title={`${formatHours(a.allocatedHours)} allocated · ${formatHours(a.spentHours)} spent`}
+                          style={{ left: rect.left, width: rect.width }}
+                          title={
+                            `${formatHours(a.allocatedHours)} allocated · ${formatHours(a.spentHours)} spent` +
+                            (rect.clippedLeft ? ' · starts before window' : '') +
+                            (rect.clippedRight ? ' · extends past window' : '')
+                          }
                         >
                           {formatHours(a.allocatedHours)}
                         </div>
@@ -201,14 +271,14 @@ export default function ResourceTimeline({
                         <div
                           key={`row-${i.id}`}
                           className="border-t border-gray-100 h-10 grid"
-                          style={{ gridTemplateColumns: `repeat(${dates.length}, 36px)` }}
+                          style={{ gridTemplateColumns: `repeat(${dates.length}, ${cellWidth}px)` }}
                         >
-                          {dates.map((d) => (
+                          {dates.map((dt) => (
                             <div
-                              key={d.toISOString()}
+                              key={dt.toISOString()}
                               className={clsx(
                                 'border-r border-gray-100 h-10',
-                                d.toDateString() === today.toDateString() && 'bg-brand-100/30',
+                                dt.toDateString() === today.toDateString() && 'bg-brand-100/30',
                               )}
                             />
                           ))}

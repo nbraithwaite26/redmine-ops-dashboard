@@ -88,7 +88,14 @@ export interface RedmineApi {
    * activity on this instance). Real-mode wiring is pending the AE-calendar
    * source; see realRedmineApi.getTimeOff.
    */
-  getTimeOff(range: { from: string; to: string }): Promise<TimeOffEntry[]>;
+  getTimeOff(range: {
+    from: string;
+    to: string;
+    /** When true, include working activities (Conference/Seminar, Customer
+     *  Visit, …) alongside OOO entries — the AE Calendar uses this. Default
+     *  false keeps the legacy OOO-only behavior. */
+    includeAtWork?: boolean;
+  }): Promise<TimeOffEntry[]>;
   /**
    * Team Gantt inputs derived from a single scoped /gantt fetch. Unlike
    * getUsers() (which 403s for non-admin keys), the user list here is

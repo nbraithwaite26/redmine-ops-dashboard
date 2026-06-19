@@ -38,7 +38,15 @@ function writeLastSync(at: number) {
   }
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+interface AppShellProps {
+  children: React.ReactNode;
+  /** True when the backend is the portable single-user .exe (CR #30). */
+  portable?: boolean;
+  /** Build version (semver) reported by /api/redmine/health. */
+  version?: string | null;
+}
+
+export default function AppShell({ children, portable = false, version = null }: AppShellProps) {
   const [apiConnected, setApiConnected] = useState(false);
   const [mockMode, setMockMode] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(readLastSync);
@@ -138,6 +146,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           onToggleSidebar={toggle}
           effectiveTheme={effectiveTheme}
           onToggleTheme={toggleTheme}
+          portable={portable}
+          version={version}
         />
         {banner && (
           <StatusBanner
