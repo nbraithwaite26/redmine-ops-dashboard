@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -53,6 +54,13 @@ const links: NavItem[] = [
       { to: '/time', label: 'Time Tracking' },
       { to: '/resources', label: 'Resource Management' },
     ],
+  },
+  {
+    to: '/reports/power-bi',
+    label: 'Reports',
+    icon: BarChart3,
+    end: true,
+    children: [{ to: '/reports/power-bi', label: 'Power BI' }],
   },
   {
     to: '/projects',

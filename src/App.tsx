@@ -14,6 +14,7 @@ import Home from './pages/Home';
 import Projects from './pages/Projects';
 import AllProjects from './pages/AllProjects';
 import ProjectCategory from './pages/ProjectCategory';
+import PowerBiReport from './pages/PowerBiReport';
 import Calendar from './pages/Calendar';
 import Hours from './pages/Hours';
 // MyHours / TeamHours are orphaned by the Hours redesign; legacy URLs
@@ -108,6 +109,7 @@ export default function App() {
         <Route path="/resources/team" element={<ResourceManagement view="team" />} />
         <Route path="/time" element={<TimeTracking />} />
         <Route path="/timesheet" element={<Timesheet />} />
+        <Route path="/reports/power-bi" element={<PowerBiReport />} />
         <Route path="/settings" element={<Settings />} />
 
         <Route
