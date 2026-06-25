@@ -11,25 +11,15 @@ function renderTasks() {
   );
 }
 
-describe('<Tasks /> (personal-first)', () => {
+describe('<Tasks /> (engineer-centered)', () => {
   beforeEach(() => localStorage.clear());
 
-  it('shows My tasks and hides the team section by default', async () => {
+  it('shows only the current user\'s tasks; no team toggle', async () => {
     renderTasks();
-    expect(await screen.findByText('My tasks')).toBeInTheDocument();
-    expect(screen.getByText('Assigned to me')).toBeInTheDocument();
-    // Team section is opt-in.
+    expect(await screen.findByText('Assigned to me')).toBeInTheDocument();
+    // Team panel + toggle are intentionally absent in the engineer-centered view.
     expect(screen.queryByTestId('tasks-team-section')).not.toBeInTheDocument();
-    expect(screen.getByTestId('tasks-team-toggle')).toHaveTextContent('Show team tasks');
-  });
-
-  it('reveals the team tasks section when the toggle is clicked', async () => {
-    renderTasks();
-    fireEvent.click(await screen.findByTestId('tasks-team-toggle'));
-    expect(await screen.findByTestId('tasks-team-section')).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByTestId('tasks-team-toggle')).toHaveTextContent('Hide team tasks'),
-    );
+    expect(screen.queryByTestId('tasks-team-toggle')).not.toBeInTheDocument();
   });
 
   it('groups My tasks by project (header rows, collapsible)', async () => {

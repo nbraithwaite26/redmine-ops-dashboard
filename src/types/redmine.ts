@@ -124,6 +124,16 @@ export interface TimeOffEntry {
   type: string;
   /** Hours out that day (full day ≈ 8). */
   hours: number;
+  /** Optional free-text description carried from the Easy Redmine attendance
+   *  row (e.g. "out for surgery", "covering Mexico HQ"). Empty when absent. */
+  description?: string;
+  /** Whether the activity counts as on-the-clock work. Optional so older
+   *  callers / fixtures stay compatible; the AE Calendar uses it. */
+  atWork?: boolean;
+  /** Local-clock start time in HH:MM (24h) from the upstream arrival. */
+  startTime?: string;
+  /** Local-clock end time in HH:MM (24h) from the upstream departure. */
+  endTime?: string;
 }
 
 export type AllocationType = 'Auto' | 'Manual' | 'Vacation' | 'Reserved';

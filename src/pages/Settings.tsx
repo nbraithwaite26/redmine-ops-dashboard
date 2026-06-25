@@ -5,6 +5,8 @@ import { testConnection } from '../services/redmineApi';
 import type { ConnectionStatus } from '../types/redmine';
 import { useTheme } from '../hooks/useTheme';
 import type { ThemeChoice } from '../hooks/useTheme';
+import { getHealth } from '../services/portableAuth';
+import PortableAutostartToggle from '../components/PortableAutostartToggle';
 
 const THEME_OPTIONS: Array<{ id: ThemeChoice; label: string; Icon: typeof Sun }> = [
   { id: 'light', label: 'Light', Icon: Sun },
@@ -19,6 +21,7 @@ const MOCK_MODE =
 export default function Settings() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [probing, setProbing] = useState(false);
+  const [portable, setPortable] = useState<boolean>(false);
 
   const probe = async () => {
     setProbing(true);
@@ -33,6 +36,20 @@ export default function Settings() {
     void probe();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    getHealth()
+      .then((h) => {
+        if (!cancelled) setPortable(h.portable);
+      })
+      .catch(() => {
+        /* Health probe failure shouldn't break the Settings page. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { theme, setTheme, effectiveTheme } = useTheme();
 
   return (
@@ -44,6 +61,17 @@ export default function Settings() {
           server-side and never exposed in the browser.
         </p>
       </div>
+
+      {portable && (
+        <section className="card p-5 space-y-3" data-testid="portable-section">
+          <h2 className="font-semibold">Portable</h2>
+          <p className="text-sm text-ink-muted">
+            You're running the portable .exe build. These settings only apply
+            to this local instance.
+          </p>
+          <PortableAutostartToggle />
+        </section>
+      )}
 
       <section className="card p-5 space-y-3" data-testid="appearance-section">
         <h2 className="font-semibold">Appearance</h2>

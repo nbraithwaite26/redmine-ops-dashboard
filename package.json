@@ -1,7 +1,7 @@
 {
   "name": "redmine-operations-dashboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "workspaces": [
     "server"
@@ -12,6 +12,7 @@
     "dev:all": "concurrently -k -n web,api -c yellow,cyan \"npm run dev\" \"npm run dev:server\"",
     "control": "node scripts/dev-control.mjs",
     "build": "tsc -b && vite build",
+    "build:portable": "node scripts/build-portable.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

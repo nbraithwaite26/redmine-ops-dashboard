@@ -1,4 +1,4 @@
-import { config } from './config.js';
+import { config, getRedmineCredentials } from './config.js';
 import { getOrFetch } from './cache.js';
 
 /**
@@ -9,7 +9,10 @@ import { getOrFetch } from './cache.js';
  * own proxy.
  */
 
-const DEFAULT_TIMEOUT_MS = 15_000;
+// Per-request upstream timeout. Reads `REDMINE_CLIENT_TIMEOUT_MS` via
+// `config.redmine.timeoutMs`; default 15 s. Raise it for slow Redmine
+// instances where writes contend with paginated reads.
+const DEFAULT_TIMEOUT_MS = config.redmine.timeoutMs;
 
 export interface RedmineRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -44,7 +47,8 @@ export class RedmineHttpError extends Error {
 
 function buildUrl(path: string, query?: RedmineRequestOptions['query']): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;
-  const url = new URL(`${config.redmineBaseUrl}${normalized}`);
+  const { baseUrl } = getRedmineCredentials();
+  const url = new URL(`${baseUrl}${normalized}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null) continue;
@@ -67,10 +71,11 @@ async function doRedmineFetch<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const { apiKey } = getRedmineCredentials();
     const response = await fetch(url, {
       method,
       headers: {
-        'X-Redmine-API-Key': config.redmineApiKey,
+        'X-Redmine-API-Key': apiKey,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },

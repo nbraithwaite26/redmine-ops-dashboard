@@ -10,7 +10,7 @@ import AllProjects from '../pages/AllProjects';
 // redirect to /hours via App.tsx.
 
 describe('<Tasks /> page', () => {
-  it('renders both My tasks and Team tasks sections', async () => {
+  it('renders the engineer-centered "Assigned to me" section', async () => {
     render(
       <MemoryRouter>
         <Tasks />
@@ -18,22 +18,11 @@ describe('<Tasks /> page', () => {
     );
     expect(screen.getByText('Tasks')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByText('My tasks')).toBeInTheDocument(),
+      expect(screen.getByText('Assigned to me')).toBeInTheDocument(),
     );
-    expect(screen.getByText(/team tasks/i)).toBeInTheDocument();
-  });
-
-  it('renders the GroupedTaskTable once the team view is expanded', async () => {
-    render(
-      <MemoryRouter>
-        <Tasks />
-      </MemoryRouter>,
-    );
-    // Team view is opt-in now — reveal it first.
-    fireEvent.click(await screen.findByTestId('tasks-team-toggle'));
-    await waitFor(() =>
-      expect(screen.getByTestId('grouped-task-table')).toBeInTheDocument(),
-    );
+    // Team view is intentionally turned off for now.
+    expect(screen.queryByTestId('tasks-team-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('grouped-task-table')).not.toBeInTheDocument();
   });
 
   it('auto-opens the ticket drawer when ?id= deep-links a known issue', async () => {

@@ -37,11 +37,15 @@ const STALE_MS = 10 * 60_000;
 const querySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Default false preserves the original OOO-only behavior. The AE Calendar
+  // (Dashboard inline view) passes "true" to also include working activities
+  // like Conference/Seminar and Customer Visit.
+  include_at_work: z.enum(['true', 'false']).default('false'),
 });
 
 timeOff.get('/', async (c) => {
   const requestId = c.get('requestId');
-  let parsed: { from: string; to: string };
+  let parsed: { from: string; to: string; include_at_work: 'true' | 'false' };
   try {
     parsed = querySchema.parse(c.req.query());
   } catch (err) {
@@ -60,6 +64,7 @@ timeOff.get('/', async (c) => {
     );
   }
   const { from, to } = parsed;
+  const includeAtWork = parsed.include_at_work === 'true';
   if (from > to) {
     return c.json(
       { error: { code: 'BAD_REQUEST', message: '`from` must be <= `to`.', requestId } },
@@ -97,7 +102,11 @@ timeOff.get('/', async (c) => {
       pagePastWindow = false;
       if (date > to) continue; // future of the window
       const mapped = adaptEasyAttendanceAsTimeOff(row);
-      if (mapped) items.push(mapped);
+      if (!mapped) continue;
+      // The adapter no longer drops at_work rows itself (so the AE Calendar
+      // can opt in to them); apply the OOO filter here when not requested.
+      if (!includeAtWork && mapped.atWork) continue;
+      items.push(mapped);
     }
     // The list is sorted by arrival desc. Once a full page's rows all
     // pre-date `from`, every subsequent page will too — stop paging.

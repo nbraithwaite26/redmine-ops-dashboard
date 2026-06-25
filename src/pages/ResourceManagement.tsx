@@ -3,7 +3,9 @@ import ReorderableSection from '../components/ReorderableSection';
 import ResourceTimeline from '../components/ResourceTimeline';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useSectionOrder } from '../hooks/useSectionOrder';
-import { getIssues, getResourceAllocations, getUsers } from '../services/redmineApi';
+import { findProjectByPath } from '../lib/projectTree';
+import { DEFAULT_PROJECT_SOURCE } from '../services/projectSource';
+import { getProjects, getTeamSchedule } from '../services/redmineApi';
 import type { Issue, ResourceAllocation, User } from '../types/redmine';
 
 interface Props {
@@ -85,25 +87,29 @@ export default function ResourceManagement({ view }: Props) {
     if (userLoading) return;
     let cancelled = false;
     setDataLoading(true);
-    // Fire the three fetches independently. The Kanban only needs issues
-    // (it derives the roster from assignees when /users.json 403s for the
-    // non-admin key); the Gantt timelines need allocations too. Each
-    // .catch keeps one slow/failing fetch from blocking the others.
-    getUsers()
-      .then((u) => { if (!cancelled) setUsers(u); })
-      .catch(() => {});
-    getIssues()
-      .then((i) => {
+    // Scope the page to the AIRCRAFT ENGINEERING project tree via
+    // getTeamSchedule(rootId) — same pattern as the Dashboard's Resource
+    // Planning tab. This replaces three unscoped, full-org calls (getUsers,
+    // getIssues, getResourceAllocations) with a single project-scoped /gantt
+    // fetch that returns users + issues + allocations already trimmed to
+    // the engineering tree. Users without an admin key get the same data
+    // because /gantt derives the roster from issue assignees.
+    (async () => {
+      try {
+        const projects = await getProjects();
         if (cancelled) return;
-        setIssues(i);
-        setDataLoading(false);
-      })
-      .catch(() => {
+        const root = findProjectByPath(projects, DEFAULT_PROJECT_SOURCE.path);
+        const schedule = await getTeamSchedule(root?.id);
+        if (cancelled) return;
+        setUsers(schedule.users);
+        setIssues(schedule.issues);
+        setAllocations(schedule.allocations);
+      } catch {
+        // Surface via the timeline's own empty state — no extra UI here.
+      } finally {
         if (!cancelled) setDataLoading(false);
-      });
-    getResourceAllocations()
-      .then((a) => { if (!cancelled) setAllocations(a); })
-      .catch(() => {});
+      }
+    })();
     return () => {
       cancelled = true;
     };

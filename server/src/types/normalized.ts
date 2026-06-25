@@ -130,6 +130,20 @@ export interface NormalizedTimeOffEntry {
   type: string;
   /** Hours out that day (full day ≈ 8). */
   hours: number;
+  /** Optional free-text description on the upstream attendance row.
+   *  Plumbed through here so the UI can surface "where they are" /
+   *  "covering for X"; absent → empty string. */
+  description: string;
+  /** Whether the activity counts as on-the-clock work. False = OOO
+   *  (Vacation, Holiday, Sick); true = on the clock but tracked
+   *  (Conference/Seminar, Customer Visit). The OOO-only `/time-off`
+   *  default filters these out; the AE Calendar view includes them. */
+  atWork: boolean;
+  /** Local-clock start time in HH:MM (24h), derived from `arrival`. */
+  startTime: string;
+  /** Local-clock end time in HH:MM (24h), derived from `departure`.
+   *  Empty when the upstream row has no departure. */
+  endTime: string;
 }
 
 export interface MetadataBundle {

@@ -8,7 +8,6 @@ import {
   FolderKanban,
   Home,
   LayoutDashboard,
-  Library,
   ListTodo,
   Settings,
   ShieldCheck,
@@ -43,13 +42,7 @@ interface NavItem {
 const links: NavItem[] = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  {
-    to: '/tasks',
-    label: 'Tasks',
-    icon: ListTodo,
-    end: true,
-    children: [{ to: '/past-due', label: 'Past Due' }],
-  },
+  { to: '/tasks', label: 'Tasks', icon: ListTodo, end: true },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   {
     to: '/hours',
@@ -57,12 +50,18 @@ const links: NavItem[] = [
     icon: Timer,
     end: true,
     children: [
+      { to: '/timesheet', label: 'Timesheet' },
       { to: '/time', label: 'Time Tracking' },
       { to: '/resources', label: 'Resource Management' },
     ],
   },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/directory', label: 'Directory', icon: Library },
+  {
+    to: '/reports/power-bi',
+    label: 'Reports',
+    icon: BarChart3,
+    end: true,
+    children: [{ to: '/reports/power-bi', label: 'Power BI' }],
+  },
   {
     to: '/projects',
     label: 'Projects',

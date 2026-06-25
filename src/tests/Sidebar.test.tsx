@@ -3,9 +3,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
-// Top-level rail labels. Past Due is a sub-link of Tasks; All Projects +
-// Project Builder are sub-links of Projects; Time Tracking + Resource
-// Management are sub-links of Hours.
+// Top-level rail labels. Directory is turned off; Past Due is no longer
+// a sub-link of Tasks. All Projects + Project Builder are sub-links of
+// Projects; Timesheet + Time Tracking + Resource Management are
+// sub-links of Hours; Power BI is the sub-link of Reports.
 const TOP_LEVEL_LABELS = [
   'Home',
   'Dashboard',
@@ -13,7 +14,6 @@ const TOP_LEVEL_LABELS = [
   'Calendar',
   'Hours',
   'Reports',
-  'Directory',
   'Projects',
   'Settings',
 ];
@@ -78,18 +78,23 @@ describe('<Sidebar /> (collapsed vs expanded)', () => {
     expect(screen.queryByRole('link', { name: 'Resource Management' })).not.toBeInTheDocument();
   });
 
-  it('Tasks group exposes Past Due; Projects exposes Project Builder', () => {
+  it('Projects exposes Project Builder; Reports exposes Power BI; Past Due / Directory stay off', () => {
     render(
       <MemoryRouter>
         <Sidebar collapsed={false} onToggle={() => {}} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('link', { name: 'Past Due' })).toHaveAttribute('href', '/past-due');
     expect(screen.getByRole('link', { name: 'Project Builder' })).toHaveAttribute(
       'href',
       '/project-builder',
     );
-    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports');
+    expect(screen.getByRole('link', { name: 'Power BI' })).toHaveAttribute(
+      'href',
+      '/reports/power-bi',
+    );
+    // Past Due and Directory are intentionally hidden for now.
+    expect(screen.queryByRole('link', { name: 'Past Due' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Directory' })).not.toBeInTheDocument();
   });
 
   it('toggling the Projects group hides/shows its sub-links', () => {

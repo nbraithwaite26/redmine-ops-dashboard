@@ -7,6 +7,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Power,
   RefreshCw,
   Search,
   Settings as SettingsIcon,
@@ -15,6 +16,7 @@ import {
 import ThemeToggle from './ThemeToggle';
 import type { EffectiveTheme } from '../hooks/useTheme';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { portableShutdown } from '../services/portableAuth';
 
 interface Props {
   apiConnected: boolean;
@@ -28,6 +30,10 @@ interface Props {
   onToggleSidebar: () => void;
   effectiveTheme: EffectiveTheme;
   onToggleTheme: () => void;
+  /** True when the backend is the portable single-user .exe (CR #30). */
+  portable?: boolean;
+  /** Build version reported by /api/redmine/health. Only shown in portable mode. */
+  version?: string | null;
 }
 
 export default function TopBar({
@@ -41,7 +47,25 @@ export default function TopBar({
   onToggleSidebar,
   effectiveTheme,
   onToggleTheme,
+  portable = false,
+  version = null,
 }: Props) {
+  const [quitting, setQuitting] = useState(false);
+  async function handleQuit() {
+    if (quitting) return;
+    const ok = window.confirm(
+      'Quit Redmine Ops Dashboard?\n\nThe local server will stop. You can reopen it by launching the app again.',
+    );
+    if (!ok) return;
+    setQuitting(true);
+    try {
+      await portableShutdown();
+    } catch {
+      // Server may have died mid-response; that's fine — exit succeeded.
+    }
+    // Browser is now talking to a dead server. Leave the tab open so the
+    // user has a moment to notice; many users just close it themselves.
+  }
   // Theme-aware logo. Light mode loads `public/logo.png`; dark mode loads
   // `public/logo-white.png`. Falls back to the ClipboardList badge if the
   // file for the active theme is missing.
@@ -199,6 +223,29 @@ export default function TopBar({
         <button className="hidden lg:inline-flex p-1.5 rounded transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="Settings">
           <SettingsIcon size={18} />
         </button>
+        {portable && version && (
+          <span
+            className="hidden md:inline-flex items-center rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-medium text-white/80"
+            title={`Portable build ${version}`}
+            data-testid="topbar-version"
+          >
+            v{version}
+          </span>
+        )}
+        {portable && (
+          <button
+            type="button"
+            onClick={handleQuit}
+            disabled={quitting}
+            aria-label="Quit Redmine Ops Dashboard"
+            title="Quit Redmine Ops Dashboard"
+            data-testid="topbar-quit"
+            className="hidden md:inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-red-200 transition hover:bg-red-500/20 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Power size={14} />
+            {quitting ? 'Quitting…' : 'Quit'}
+          </button>
+        )}
         <button className="p-1 rounded-full transition hover:bg-[color:var(--brand-surface-hover)]" aria-label="User menu">
           <div
             style={{
